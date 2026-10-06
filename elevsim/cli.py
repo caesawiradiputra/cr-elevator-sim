@@ -104,7 +104,8 @@ def cmd_compare(args) -> None:
 
 def cmd_viewer(args) -> None:
     from .viewer_build import build_viewer
-    path = build_viewer(args.out, demo=not args.no_demo, pyodide_base=args.pyodide_base, fragment=args.fragment)
+    path = build_viewer(args.out, demo=not args.no_demo, pyodide_base=args.pyodide_base, fragment=args.fragment,
+                        demo_all=args.demo_all)
     print(f"viewer written to {path}")
 
 
@@ -133,6 +134,8 @@ def main(argv=None) -> None:
     p.add_argument("--no-demo", action="store_true", help="skip the precomputed demo run")
     p.add_argument("--pyodide-base", default="https://cdn.jsdelivr.net/npm/pyodide@0.26.4/",
                    help="URL or relative path of the Pyodide files")
+    p.add_argument("--demo-all", action="store_true",
+                   help="precompute every scenario x strategy (for hosts where the engine cannot load)")
     p.add_argument("--fragment", action="store_true", help="omit the <html> wrapper")
     p.set_defaults(func=cmd_viewer)
 

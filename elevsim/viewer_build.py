@@ -2,7 +2,8 @@
 
 The viewer is one HTML file holding the page, its script, the Python source of
 this package (run in the browser by Pyodide), the scenario presets and a
-precomputed demo run so something is on screen before the engine loads.
+precomputed demo runs: they are on screen before the engine loads, and they
+are all a reader can watch where the engine cannot load at all.
 """
 from __future__ import annotations
 
@@ -12,6 +13,7 @@ from pathlib import Path
 from .api import compare, list_strategies, run
 from .config import SimConfig
 from .metrics import METRICS
+from .strategies import STRATEGIES
 
 ROOT = Path(__file__).resolve().parent.parent
 PYODIDE_CDN = "https://cdn.jsdelivr.net/npm/pyodide@0.26.4/"
@@ -37,7 +39,7 @@ def _sources() -> dict[str, str]:
     }
 
 
-def build_data(demo: bool = True, pyodide_base: str = PYODIDE_CDN) -> dict:
+def build_data(demo: bool = True, pyodide_base: str = PYODIDE_CDN, demo_all: bool = False) -> dict:
     presets = _presets()
     data = {
         "pyodideBase": pyodide_base,
@@ -49,23 +51,28 @@ def build_data(demo: bool = True, pyodide_base: str = PYODIDE_CDN) -> dict:
         "demo": None,
     }
     if demo:
-        preset = next((p for p in presets if p["id"] == DEMO_PRESET), None)
-        cfg = (preset or {}).get("config", {})
-        demo_run = run(cfg, "eta", record=True)
-        demo_cmp = compare(cfg, seeds=5)
-        for r in demo_cmp["results"]:
-            r.pop("runs")  # per-seed detail is not needed in the page
-        data["demo"] = {"run": demo_run, "compare": demo_cmp}
+        ids = [p["id"] for p in presets] if demo_all else [DEMO_PRESET]
+        scenarios = {}
+        for p in presets:
+            if p["id"] not in ids:
+                continue
+            runs = {name: run(p["config"], name, record=True, frame_interval=1.0) for name in STRATEGIES}
+            cmp = compare(p["config"], seeds=5)
+            for r in cmp["results"]:
+                r.pop("runs")  # per-seed detail is not needed in the page
+            scenarios[p["id"]] = {"runs": runs, "compare": cmp}
+        data["demo"] = {"default": DEMO_PRESET if DEMO_PRESET in scenarios else next(iter(scenarios), None),
+                        "default_strategy": "eta", "scenarios": scenarios}
     data["defaults"].pop("extra", None)
     return data
 
 
 def build_viewer(out: str = "dist/viewer.html", demo: bool = True, pyodide_base: str = PYODIDE_CDN,
-                 fragment: bool = False) -> str:
+                 fragment: bool = False, demo_all: bool = False) -> str:
     """Write the viewer. ``fragment`` omits the <!doctype>/<html> wrapper (for hosts that add their own)."""
     vdir = ROOT / "viewer"
     page = (vdir / "index.html").read_text()
-    payload = json.dumps(build_data(demo, pyodide_base), separators=(",", ":")).replace("</", "<\\/")
+    payload = json.dumps(build_data(demo, pyodide_base, demo_all), separators=(",", ":")).replace("</", "<\\/")
     # Data goes in last: it contains this file's source, placeholders included.
     page = page.replace("/*__STYLE__*/", (vdir / "style.css").read_text())
     page = page.replace("/*__SCRIPT__*/", (vdir / "app.js").read_text())

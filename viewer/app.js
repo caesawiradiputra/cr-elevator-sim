@@ -78,10 +78,12 @@
 
   function populateSelectors() {
     const preset = $("preset");
+    const keep = preset.value;
     preset.innerHTML = "";
     const custom = new Option("Custom", "");
     preset.add(custom);
     (DATA.presets || []).forEach((p, i) => preset.add(new Option(p.name, String(i))));
+    preset.value = keep || "";
     const strat = $("strategy");
     strat.innerHTML = "";
     strategies.forEach((s) => strat.add(new Option(s.label, s.name)));
@@ -98,7 +100,27 @@
   }
 
   // ------------------------------------------------------------ simulation
+  // Precomputed scenario matching the form, for when the engine is unavailable.
+  function demoForForm() {
+    const p = DATA.presets[Number($("preset").value)];
+    if ($("preset").value === "" || !p || !DATA.demo) return null;
+    return DATA.demo.scenarios[p.id] || null;
+  }
+  function selectPreset(id) {
+    const i = (DATA.presets || []).findIndex((p) => p.id === id);
+    if (i < 0) return;
+    $("preset").value = String(i);
+    fillForm(Object.assign({}, DEFAULTS, DATA.presets[i].config));
+  }
+
   async function runSimulation() {
+    if (!py) {
+      const d = demoForForm();
+      const res = d && d.runs[$("strategy").value];
+      if (!res) { $("run-hint").textContent = "Pick one of the precomputed scenarios: custom settings need the Python engine."; return; }
+      setResult(res); play();
+      return;
+    }
     const cfg = readForm();
     const err = validate(cfg);
     if (err) { $("run-hint").textContent = err; return; }
@@ -401,6 +423,13 @@
   // --------------------------------------------------------------- compare
   let compareData = null;
   async function runCompare() {
+    if (!py) {
+      const d = demoForForm();
+      if (!d) { $("compare-hint").textContent = "Pick one of the precomputed scenarios on the Watch tab: custom settings need the Python engine."; return; }
+      compareData = d.compare; renderCompare();
+      $("compare-hint").textContent = `Showing the precomputed comparison (${d.compare.seeds.length} seeds).`;
+      return;
+    }
     const cfg = readForm();
     const err = validate(cfg);
     if (err) { $("compare-hint").textContent = err; return; }
@@ -463,7 +492,7 @@
     const head = "<tr><th>Algorithm</th>" + cols.map((k) => `<th>${DATA.metrics[k].label}${DATA.metrics[k].unit ? ` (${DATA.metrics[k].unit})` : ""}</th>`).join("") + "<th></th></tr>";
     const body = res.map((r, i) => "<tr><td>" + r.label + "</td>" + cols.map((k) =>
       `<td class="${bestOf[k] === i ? "best" : ""}">${num(r.metrics[k].mean)}${r.metrics[k].std ? ` <span class="sd">±${num(r.metrics[k].std)}</span>` : ""}</td>`).join("") +
-      `<td>${py ? `<button class="linkish" data-watch="${r.strategy}">Watch</button>` : ""}</td></tr>`).join("");
+      `<td><button class="linkish" data-watch="${r.strategy}">Watch</button></td></tr>`).join("");
     $("table").innerHTML = `<thead>${head}</thead><tbody>${body}</tbody>`;
 
     const byJourney = res.slice().sort((a, b) => a.metrics.avg_journey.mean - b.metrics.avg_journey.mean);
@@ -491,10 +520,11 @@
   function wire() {
     $("tab-watch").onclick = () => selectTab("watch");
     $("tab-compare").onclick = () => selectTab("compare");
-    $("strategy").onchange = updateStrategyNote;
+    $("strategy").onchange = () => { updateStrategyNote(); if (!py) runSimulation(); };
     $("preset").onchange = () => {
       const p = DATA.presets[Number($("preset").value)];
       if (p) fillForm(Object.assign({}, DEFAULTS, p.config));
+      if (!py) { runSimulation(); runCompare(); }
     };
     for (const f of CFG_FIELDS) if ($(f)) $(f).addEventListener("input", () => { if (document.activeElement === $(f)) $("preset").value = ""; });
     $("run-btn").onclick = runSimulation;
@@ -529,11 +559,13 @@
     fillForm(DEFAULTS);
     populateSelectors();
     wire();
-    if (DATA.demo && DATA.demo.run) {
-      fillForm(DATA.demo.run.config);
-      $("strategy").value = DATA.demo.run.strategy; updateStrategyNote();
-      setResult(DATA.demo.run);
-      if (DATA.demo.compare) { compareData = DATA.demo.compare; renderCompare(); }
+    const demo = DATA.demo && DATA.demo.default && DATA.demo.scenarios[DATA.demo.default];
+    if (demo) {
+      const first = demo.runs[DATA.demo.default_strategy] || Object.values(demo.runs)[0];
+      selectPreset(DATA.demo.default);
+      $("strategy").value = first.strategy; updateStrategyNote();
+      setResult(first);
+      compareData = demo.compare; renderCompare();
       playT = Math.min(derived.end, 120);
       play();
     }
@@ -547,9 +579,14 @@
       if (compareData) renderCompare();
     } catch (e) {
       console.warn(e);
-      setEngine("err", "Python engine unavailable here, showing the built-in demo run");
-      const msg = "The Python engine could not load in this browser, so only the built-in demo run and loaded trace files can be shown.";
+      setEngine("err", "Showing precomputed runs");
+      const ids = Object.keys((DATA.demo && DATA.demo.scenarios) || {});
+      const names = (DATA.presets || []).filter((p) => ids.includes(p.id)).map((p) => p.name);
+      const msg = "The Python engine can't load on this page, so it plays runs computed in advance" +
+        (names.length ? ` for: ${names.join(", ")}.` : ".") +
+        " For custom settings, run python3 -m elevsim viewer and open dist/viewer.html.";
       $("run-hint").textContent = msg; $("compare-hint").textContent = msg;
+      $("run-btn").disabled = !ids.length; $("compare-btn").disabled = !ids.length;
     }
   }
 
