@@ -1,0 +1,6 @@
+{
+  "name": "Small building, one car",
+  "description": "Six floors, one elevator, steady mixed traffic.",
+  "floors": 6, "elevators": 1, "capacity": 6,
+  "passengers": 150, "arrival_rate": 6, "traffic": "uniform"
+}

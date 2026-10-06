@@ -1,0 +1,138 @@
+<title>Elevator Algorithm Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DotGothic16&family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+Condensed:wght@400;600&display=swap">
+<style>
+/*__STYLE__*/
+</style>
+
+<div class="app">
+  <header class="top">
+    <div class="brand"><span class="led" aria-hidden="true">&#9650;&#9660;</span><h1>Elevator Algorithm Lab</h1></div>
+    <nav class="tabs" role="tablist">
+      <button class="tab" role="tab" id="tab-watch" aria-selected="true" aria-controls="view-watch">Watch</button>
+      <button class="tab" role="tab" id="tab-compare" aria-selected="false" aria-controls="view-compare">Compare</button>
+    </nav>
+    <div class="engine"><span class="dot busy" id="engine-dot"></span><span id="engine-text">Loading the Python engine…</span></div>
+  </header>
+
+  <section class="watch" id="view-watch" role="tabpanel" aria-labelledby="tab-watch">
+    <div class="panel">
+      <h2>Building &amp; traffic</h2>
+      <div class="form" id="config-form">
+        <div class="field wide"><label for="preset">Scenario</label><select id="preset"></select></div>
+        <div class="field"><label for="floors">Floors</label><input id="floors" type="number" min="2" max="40"></div>
+        <div class="field"><label for="elevators">Elevators</label><input id="elevators" type="number" min="1" max="8"></div>
+        <div class="field"><label for="capacity">Car capacity</label><input id="capacity" type="number" min="1" max="30"></div>
+        <div class="field"><label for="passengers">Passengers</label><input id="passengers" type="number" min="1" max="3000"></div>
+        <div class="field"><label for="arrival_rate">Arrivals / min</label><input id="arrival_rate" type="number" min="0.1" step="0.5"></div>
+        <div class="field"><label for="seed">Seed</label><input id="seed" type="number" min="0"></div>
+        <div class="field wide"><label for="traffic">Traffic pattern</label>
+          <select id="traffic">
+            <option value="uniform">Uniform (any floor to any floor)</option>
+            <option value="up_peak">Morning up-peak (from lobby)</option>
+            <option value="down_peak">Evening down-peak (to lobby)</option>
+            <option value="lunch">Lunch (to and from lobby)</option>
+            <option value="interfloor">Interfloor (between upper floors)</option>
+          </select></div>
+        <div class="field wide"><label for="idle_parking">Idle cars</label>
+          <select id="idle_parking"><option value="stay">Wait where they stop</option><option value="lobby">Return to the lobby</option></select></div>
+      </div>
+      <details class="more">
+        <summary>Timing</summary>
+        <div class="form">
+          <div class="field"><label for="floor_travel_time">Seconds per floor</label><input id="floor_travel_time" type="number" min="0.5" step="0.5"></div>
+          <div class="field"><label for="door_time">Door open/close (s)</label><input id="door_time" type="number" min="0.5" step="0.5"></div>
+          <div class="field"><label for="board_time">Board/alight (s)</label><input id="board_time" type="number" min="0.5" step="0.5"></div>
+          <div class="field"><label for="lobby_floor">Lobby floor index</label><input id="lobby_floor" type="number" min="0"></div>
+        </div>
+      </details>
+      <h2 style="margin-top:14px">Algorithm</h2>
+      <div class="field"><label for="strategy">Control strategy</label><select id="strategy"></select></div>
+      <p class="strategy-note" id="strategy-note"></p>
+      <div class="actions">
+        <button class="btn primary" id="run-btn" disabled>Run simulation</button>
+        <label class="btn" for="trace-file">Load trace…</label>
+        <input id="trace-file" type="file" accept=".json,application/json" hidden>
+      </div>
+      <p class="hint" id="run-hint"></p>
+    </div>
+
+    <div class="stage">
+      <div class="canvas-wrap" id="canvas-wrap">
+        <canvas id="building" aria-label="Building cross-section showing elevator cars and waiting passengers"></canvas>
+        <div class="overlay" id="overlay" hidden></div>
+      </div>
+      <div class="transport">
+        <button class="btn" id="play-btn" aria-label="Play">Play</button>
+        <button class="btn" id="restart-btn">Restart</button>
+        <input type="range" id="scrub" min="0" max="1000" value="0" step="1" aria-label="Simulation time">
+        <span class="clock" id="clock">0:00</span>
+        <select id="speed" aria-label="Playback speed">
+          <option value="1">1×</option><option value="2">2×</option><option value="4">4×</option>
+          <option value="8" selected>8×</option><option value="16">16×</option><option value="32">32×</option>
+        </select>
+      </div>
+      <div class="panel">
+        <h2>People waiting over time</h2>
+        <canvas class="spark" id="spark" aria-label="Number of passengers waiting over the run"></canvas>
+        <div class="legend">
+          <span><i style="background:var(--good)"></i>just arrived</span>
+          <span><i style="background:var(--warn)"></i>waiting a while</span>
+          <span><i style="background:var(--hot)"></i>long wait (≥ threshold)</span>
+          <span>▲▼ lit = hall button pressed</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="readouts">
+      <div class="panel">
+        <h2>At this moment</h2>
+        <dl class="kv" id="live"></dl>
+      </div>
+      <div class="panel">
+        <h2>Cars</h2>
+        <div class="cars" id="cars"></div>
+      </div>
+      <div class="panel">
+        <h2>Whole run</h2>
+        <p class="run-name" id="run-name"></p>
+        <dl class="kv" id="final"></dl>
+      </div>
+    </div>
+  </section>
+
+  <section class="compare" id="view-compare" role="tabpanel" aria-labelledby="tab-compare" hidden>
+    <div class="panel">
+      <h2>Batch comparison</h2>
+      <p class="hint" style="margin-top:0">Every strategy runs on exactly the same passengers (same seeds), using the scenario set on the Watch tab.</p>
+      <div class="form">
+        <div class="field"><label for="seeds">Seeded runs</label><input id="seeds" type="number" min="1" max="30" value="5"></div>
+        <div class="field"><label for="metric">Chart metric</label><select id="metric"></select></div>
+      </div>
+      <div class="actions"><button class="btn primary" id="compare-btn" disabled>Run comparison</button></div>
+      <p class="hint" id="compare-hint"></p>
+    </div>
+    <div class="compare-main">
+      <div class="panel">
+        <p class="verdict" id="verdict">Run a comparison to rank the algorithms.</p>
+      </div>
+      <div class="panel">
+        <h2 id="bars-title">Chart</h2>
+        <div class="bars" id="bars"></div>
+        <p class="hint">Bars show the mean across seeded runs; whiskers show ± one standard deviation. Highlighted bar is the best.</p>
+      </div>
+      <div class="panel">
+        <h2>All metrics (mean across runs)</h2>
+        <div class="table-wrap"><table id="table"></table></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+window.ELEVSIM = /*__DATA__*/null;
+</script>
+<script>
+/*__SCRIPT__*/
+</script>

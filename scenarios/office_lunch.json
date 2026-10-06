@@ -1,0 +1,6 @@
+{
+  "name": "Office lunch",
+  "description": "Two-way traffic to and from the lobby plus some interfloor trips.",
+  "floors": 15, "elevators": 4, "capacity": 10,
+  "passengers": 400, "arrival_rate": 25, "traffic": "lunch"
+}

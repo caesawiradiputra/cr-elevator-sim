@@ -1,0 +1,6 @@
+{
+  "name": "Office morning rush",
+  "description": "Most people arrive at the lobby and head up.",
+  "floors": 15, "elevators": 4, "capacity": 10,
+  "passengers": 400, "arrival_rate": 30, "traffic": "up_peak"
+}
