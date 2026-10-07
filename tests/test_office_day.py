@@ -3,6 +3,7 @@ from dataclasses import replace
 
 from elevsim import SimConfig, Simulation, compare, run
 from elevsim.config import parse_hhmm
+from elevsim.model import Passenger
 from elevsim.passengers import generate_passengers
 from elevsim.schedule import generate_office_day
 from elevsim.strategies import STRATEGIES, get_strategy
@@ -184,6 +185,33 @@ class OrderingTests(unittest.TestCase):
         print(f"\nrequest-before-alight share by strategy (seed 1): {shares}")
         for name, share in shares.items():
             self.assertTrue(0.0 <= share <= 1.0, name)
+
+
+class FrameTests(unittest.TestCase):
+    def test_office_day_trace_is_capped(self):
+        res = run(office(employees=20), "collective", record=True)
+        frames = res["trace"]["frames"]
+        interval = res["trace"]["frame_interval"]
+        self.assertLessEqual(len(frames), 10_000)
+        self.assertGreater(interval, 0.5)
+        self.assertAlmostEqual(frames[1][0] - frames[0][0], interval, places=3)
+
+    def test_cap_holds_for_a_very_long_day(self):
+        cfg = SimConfig(floors=3, traffic="office_day")
+        person = Passenger(id=0, arrival=60000.0, origin=0, dest=1)
+        sim = Simulation(cfg, get_strategy("collective"), passengers=[person]).run(record=True)
+        self.assertLessEqual(len(sim.frames), 10_000)
+        self.assertGreater(sim.frame_interval, 6.0)
+
+    def test_existing_traffic_keeps_the_requested_interval(self):
+        res = run({"passengers": 50, "seed": 3}, "eta", record=True, frame_interval=1.0)
+        frames = res["trace"]["frames"]
+        self.assertEqual(res["trace"]["frame_interval"], 1.0)
+        self.assertAlmostEqual(frames[1][0] - frames[0][0], 1.0)
+
+    def test_default_interval_is_unchanged_for_existing_traffic(self):
+        res = run({"passengers": 50, "seed": 3}, "eta", record=True)
+        self.assertEqual(res["trace"]["frame_interval"], 0.5)
 
 
 if __name__ == "__main__":

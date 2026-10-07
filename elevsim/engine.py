@@ -15,6 +15,7 @@ direction board one at a time until the car is full.
 """
 from __future__ import annotations
 
+import math
 from collections import deque
 
 from .config import DEFAULT_MAX_TIME, SimConfig
@@ -25,6 +26,7 @@ from .model import (
 from .passengers import generate_passengers
 
 EPS = 1e-9
+MAX_FRAMES = 10_000  # most frames a recorded office_day run may hold
 
 
 class Simulation:
@@ -56,6 +58,7 @@ class Simulation:
         # animation
         self.frames: list | None = None
         self._frame_every = 1
+        self.frame_interval: float | None = None  # effective seconds between frames, set by run(record=True)
         self._tick = 0
 
         strategy.setup(self)
@@ -96,13 +99,28 @@ class Simulation:
     def run(self, record: bool = False, frame_interval: float = 0.5) -> "Simulation":
         if record:
             self.frames = []
-            self._frame_every = max(1, round(frame_interval / self.cfg.dt))
+            self._frame_every = self._frames_every(frame_interval)
+            self.frame_interval = self._frame_every * self.cfg.dt
             self._record_frame()
         while not self.finished() and self.t < self.horizon - EPS:
             self.step()
         if record and (self._tick % self._frame_every):
             self._record_frame()
         return self
+
+    def _frames_every(self, requested: float) -> int:
+        """Ticks between recorded frames.
+
+        The requested interval, widened for office_day so a run records at most MAX_FRAMES
+        frames. 9997 = MAX_FRAMES minus the initial frame, the final frame and one tick of
+        slack. Existing traffic is never widened: with the 4-hour default horizon the cap
+        would change every existing scenario's frames.
+        """
+        dt = self.cfg.dt
+        every = max(1, round(requested / dt))
+        if self.cfg.traffic == "office_day":
+            every = max(every, math.ceil(self.horizon / (MAX_FRAMES - 3) / dt - 1e-9))
+        return every
 
     def step(self) -> None:
         dt = self.cfg.dt
