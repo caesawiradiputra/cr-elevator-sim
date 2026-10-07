@@ -80,7 +80,8 @@ tests and the CI smoke commands before and after.
 - [ ] Smoother animation between sparse frames. The viewer interpolates a car only
   when it moved at most 1.01 floors between frames, so 5 s frames on a full day
   snap. (2026-10-08)
-- [ ] Full-day clock (HH:MM) and chart axis in the viewer. (2026-10-08)
+- [x] Full-day clock (HH:MM) in the viewer. Shipped in 0.2.0. The sparkline has no time
+  axis; adding one is still open. (2026-10-08)
 
 ## Engine and behavior (probably rejected, kept so the reason is not lost)
 

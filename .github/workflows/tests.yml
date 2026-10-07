@@ -21,4 +21,6 @@ jobs:
       - name: Smoke-test the CLI and viewer build
         run: |
           python -m elevsim compare --passengers 80 --seeds 2
+          python -m elevsim run -s eta --config scenarios/office_day.json --employees 30
+          node --check viewer/app.js
           python -m elevsim viewer --out dist/viewer.html

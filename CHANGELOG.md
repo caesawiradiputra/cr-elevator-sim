@@ -22,17 +22,30 @@ when `dev` is promoted. Each entry links to its design spec when there is one.
 
 ## [Unreleased]
 
-### Planned for 0.2.0
+## [0.2.0] - 2026-10-07
 
-- Full-day office scenario (`traffic: "office_day"`): employees with fixed desk
-  floors, arrivals from an hour before 08:00 with late arrivals, a 12:00-13:00
-  lunch (out of the building or cafeteria only), mid-day meeting and cafeteria
-  trips, an evening exodus with some staying late, and per-run day variation.
-- Energy metric (`energy_kwh`) with a replaceable `EnergyModel`, starting with a
-  simple load-weighted distance model.
-- `max_time` default becomes `None` (auto): 4 hours for existing traffic, as before,
-  and derived from the latest arrival for `office_day`.
-- Design: `docs/superpowers/specs/2026-10-08-office-day-scenario-design.md`
+### Added
+
+- Full-day office scenario (`traffic: "office_day"`, `scenarios/office_day.json`): a fixed
+  headcount of employees with fixed desk floors, arrivals from an hour before 08:00 with late
+  arrivals, a 12:00-13:00 lunch (out of the building or cafeteria only), mid-day meetings and
+  cafeteria breaks, an evening exodus with some staying late, and per-seed day variation.
+  Settings: `employees`, `day_start`, `day_end`, `day_variation` and the `office` dict.
+- Energy metric `energy_kwh` (a comparative estimate) with a replaceable `EnergyModel`
+  (`elevsim/energy.py`), a `loaded_floor_distance` counter per car, and `energy_per_passenger`
+  in the summary.
+- Summary keys `passengers_total` and `horizon`; CLI `--employees` and a kWh column in the compare table.
+- Viewer: the office scenario (live engine only), an HH:MM clock, energy rows, 120x and 600x speeds.
+- `docs/code-map.md`, `docs/ideas.md` and the design spec and plan under `docs/superpowers/`.
+
+### Changed
+
+- `max_time` now defaults to `None` (auto): 4 hours for existing traffic, exactly as before, and the
+  last request plus a drain margin for `office_day`. An explicit value is never overridden; one too
+  small for `office_day` raises an error.
+- The recorded trace of an `office_day` run is capped at 10,000 frames, and the trace reports the
+  effective `frame_interval`. Existing scenarios record the same frames as before.
+- `--passengers` together with `--traffic office_day` is rejected.
 
 ## [0.1.0] - 2026-10-06
 

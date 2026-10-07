@@ -23,6 +23,8 @@ python3 -m elevsim viewer --out dist/viewer.html                 # build the vie
   (covered by `tests/test_engine.py`).
 - Strategies are registered in `elevsim/strategies/__init__.py`; nothing else
   hardcodes algorithm names. Use `/add-strategy` to add one.
+- Traffic that needs a scheduler (`office_day`) lives in `elevsim/schedule.py` and is selected through
+  `SCHEDULED_TRAFFIC` in `elevsim/config.py`; energy models live in `elevsim/energy.py`. See `docs/code-map.md`.
 - `dist/` and `results/` are generated and gitignored.
 
 ## Git
