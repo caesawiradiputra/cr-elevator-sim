@@ -2,6 +2,9 @@
 
 Status: **draft, awaiting user review** (brainstorming, architectural path).
 Date: 2026-10-08. Branch: `feat/office-day-scenario`.
+Current version: `0.1.0`. Target version: `0.2.0` (minor: new feature), a plan
+that can change before release. The bump to `__version__` happens in the last
+commit of the implementation branch. Changelog: `CHANGELOG.md` (Unreleased).
 
 ## 1. Goal
 
