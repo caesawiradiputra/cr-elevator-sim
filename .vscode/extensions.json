@@ -1,0 +1,9 @@
+{
+  "recommendations": [
+    "ms-python.python",
+    "ms-python.vscode-pylance",
+    "redhat.vscode-yaml",
+    "davidanson.vscode-markdownlint"
+  ],
+  "unwantedRecommendations": []
+}
