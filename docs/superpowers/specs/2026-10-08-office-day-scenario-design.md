@@ -1,6 +1,6 @@
 # Full-day office scenario and energy metric: design
 
-Status: **draft v3, two external reviews incorporated, awaiting user approval**
+Status: **draft v4, three reviews incorporated (two external, one Opus self-review), awaiting user approval**
 (brainstorming, architectural path).
 Date: 2026-10-08. Branch: `feat/office-day-scenario`.
 Current version: `0.1.0`. Target version: `0.2.0` (minor: new feature), a plan
@@ -41,7 +41,8 @@ Decisions taken in the session:
 
 - Building and headcount defaults are configurable, defaulting to 15 floors,
   4 cars, capacity 10 and about 300 employees (desks spread evenly over floors 1-14).
-- The cafeteria and the lobby are floor 0.
+- The cafeteria is on the lobby floor (`lobby_floor`, default 0). The scheduler
+  always uses `cfg.lobby_floor`, never a literal 0, and desks are never on it.
 - Approach 1: a separate scheduler produces the existing `Passenger` list. The
   engine does not become employee-aware.
 
@@ -61,23 +62,39 @@ Decisions taken in the session:
 - **Day as segments.** Each person's day is a sequence of timed segments:
   1. arrive (lobby -> desk);
   2. mid-day meetings (desk -> floor F -> desk);
-  3. short cafeteria breaks (desk -> 0 -> desk);
+  3. short cafeteria breaks (desk -> lobby floor -> desk);
   4. lunch: out of the building (desk -> lobby, back later lobby -> desk),
-     cafeteria only (desk -> 0 -> desk), or at the desk;
+     cafeteria only (desk -> lobby floor -> desk), or at the desk;
   5. go home (desk -> lobby).
-- **Consistency.** Segments for one person are laid out sequentially, so a trip's
-  from-floor always equals where the person is. A random segment that would
-  overlap another is dropped, never squeezed in.
+- **Consistency and priority.** Segments for one person are laid out sequentially,
+  so a trip's from-floor always equals where the person is.
+  1. **Fixed segments first:** arrival, lunch and go-home are placed before
+     anything else. They are never dropped, so everyone enters, has lunch as
+     assigned, and leaves.
+  2. **Optional segments second:** meetings and cafeteria breaks are candidates.
+     Each candidate is a whole round trip (out and back) and is kept or dropped
+     as one unit, so nobody is left on the wrong floor.
+  3. **Overlap includes the gap:** a candidate is dropped if any of its requests
+     would fall within the minimum gap (see Temporal order) of another segment's
+     requests, never squeezed in.
+  4. **Window:** the arrival-peak shift is clamped so no arrival falls before
+     `day_start`, and every request is at or before `day_end`.
 - **Clock.** Time 0 is `day_start` (default 06:45). The day window is the config
   pair `day_start` and `day_end` (default 20:00, the latest planned departure),
   not hard-coded times, so a longer window such as 00:00-23:59 is a config
   change (see Future work). Every generated trip falls inside the window.
-  `max_time` is derived so the whole day fits (see the timeline invariant below).
-- **Passenger count.** The trip count is derived (about 7 trips per person, so
-  about 2,000 for 300 employees), and `employees` is the user-facing size. The
-  derived count is written back to `passengers` in the resolved config so results
-  never show a misleading value. The CLI rejects `--passengers` together with
-  `office_day`, instead of silently ignoring it.
+  The simulation horizon (`max_time`) is resolved from the generated passengers
+  (see the timeline invariant below).
+- **Passenger count.** The trip count is derived (about 7 candidate trips per
+  person, so up to about 2,000 for 300 employees, fewer after dropped candidates),
+  and `employees` is the user-facing size. `cfg.passengers` is **ignored** for
+  `office_day` and the config is never mutated, because `compare()` generates
+  passengers per seed on a copy of the config and `Simulation` skips generation
+  when it is given a passenger list. Instead the per-run result reports the real
+  count (`passengers_total` in the summary), and the CLI compare header reads it
+  from the results. The CLI rejects `--passengers` together with `office_day`
+  (it tests `args.passengers is not None`, because a config loaded from file
+  always carries a `passengers` value).
 - **Internal representation.** Employees (id and fixed desk floor) are created
   separately from any day's trips. An `OfficeDay` is one day built from those
   employees: the day profile and each employee's ordered trips, with a
@@ -97,7 +114,7 @@ Decisions taken in the session:
   trips can be lower than the configured rate. This is documented, and a test
   measures the realized rate on a large headcount.
 - Lunch out of the building and lunch in the cafeteria are the same trip to the
-  engine (desk -> floor 0 -> desk). They differ only in the absence duration:
+  engine (desk -> lobby floor -> desk). They differ only in the absence duration:
   out of the building is longer (default 30-60 minutes), cafeteria only is
   shorter (default 15-40 minutes).
 - **Timeline invariant.** `max_time` is at least the latest generated
@@ -109,12 +126,18 @@ Decisions taken in the session:
   serving it. Example: the latest request at 19:57 and a 1-hour margin give a
   `max_time` equal to 20:57.
   - `max_time` changes from a fixed `4 * 3600.0` to `float | None = None`, meaning
-    "auto". The engine reads it in one place (`engine.py`, the `run` loop).
-  - Auto for existing traffic is exactly the old 4 hours, so current scenarios
-    behave identically. Auto for `office_day` is the latest `Passenger.arrival` plus the
-    drain margin.
+    "auto". `cfg.max_time` stays `None` and is never overwritten with a resolved
+    value, so a copy made by `replace(cfg, seed=n)` resolves its own horizon.
+  - The horizon is resolved in `Simulation.__init__` from `self.passengers`,
+    because that is the one place every path goes through (CLI, `compare`, the
+    viewer and the tests). Auto for existing traffic is exactly the old 4 hours,
+    so current scenarios behave identically. Auto for `office_day` is the latest
+    `Passenger.arrival` plus the drain margin. The resolved value is reported as
+    `horizon` in the summary.
   - An explicit `max_time` is never overridden. If it is smaller than the
-    `office_day` requirement, generation raises a `ValueError` naming both values.
+    `office_day` requirement, `Simulation.__init__` raises a `ValueError` naming
+    both values. This cannot be a `validate()` check, because arrivals are not
+    known until generation.
 - **Temporal order.** Within one employee's trips, each trip's `Passenger.arrival`
   is after the previous trip's `Passenger.arrival` plus a minimum gap (default
   300 s), so the order is strictly increasing. The scheduler cannot know ride
@@ -138,7 +161,7 @@ Default day shape (all values are config keys; `±` is the day-level deviation):
 | --- | --- |
 | Arrival | 85% arrive 07:00-08:00 with a peak near 07:50. 15% (±5 points) arrive late, 08:00-09:30, on a tail. |
 | Lunch (12:00-13:00) | 40% (±10) leave the building, 30% go to the cafeteria and back to the desk, 30% stay at the desk. Departures spread about 30 minutes either side of 12:00. |
-| Mid-day (09:00-17:00) | On average about 1 meeting trip and 0.7 cafeteria breaks per person, at random times in working hours. |
+| Mid-day (09:00-17:00) | On average about 1 meeting trip and 0.7 cafeteria breaks per person, at random times in working hours. A meeting lasts 30-60 minutes and a break 10-20 minutes. |
 | Going home | 80% leave 17:00-17:45. 20% (±8) stay late and leave 17:45-20:00. |
 
 The lunch split and the stay-late share are placeholders. They can be replaced
@@ -152,16 +175,35 @@ several seeds in the browser (Pyodide) could be slow.
 When all cars are idle, nobody is waiting and the next arrival is far away, the
 engine jumps the clock forward and credits the skipped time to idle.
 
-- Fast-forward is an execution optimization only. With it on or off, the same
-  config, seed and algorithm must give identical per-passenger board and alight
-  times, identical per-elevator statistics and identical summary metrics. This
-  is tested on a short scenario by comparing the full result, not only the
-  aggregates.
-- A jump always lands on the tick grid (a multiple of `dt`), so the rounding of
-  `t` matches the tick-by-tick run.
-- Parking behaviour (`idle_parking: "lobby"`, `park_delay`) must still happen at
-  the correct simulated times, so the jump stops at those moments.
-- If profiling shows the full day runs fast enough without it, drop this section.
+State that a jump must keep consistent, checked against the engine and the
+strategies:
+
+- **Strategy timers.** `eta` re-plans when `sim.t - _last_replan >= reassign_every`
+  and then resets `_last_replan`, so skipping ticks shifts its re-plan phase and
+  can change later assignments. Strategies get a hook `skip_idle(sim, t_from,
+  t_to)` (default no-op). `eta` overrides it to move `_last_replan` to where
+  tick-by-tick execution would have left it.
+- **Tick counter and frames.** `_tick` advances by the number of skipped ticks. If
+  frames are being recorded, the skipped frames are emitted (the cars are idle, so
+  only the time changes).
+- **Time arithmetic.** `t` advances with `round(t + dt, 9)` and statistics add
+  `dt` per tick, which a single jump of `k x dt` reproduces exactly only when `dt`
+  is a power-of-two fraction (0.5, 0.25, ...). Fast-forward is therefore enabled
+  only for such `dt`; otherwise the engine silently runs tick by tick.
+- **Bottleneck sampling.** With `bottleneck_queue <= 0` every floor counts as
+  bottlenecked even when empty, so fast-forward is also disabled then.
+- **Parking.** A jump stops at the moment an idle car not at the lobby reaches
+  `idle_since + park_delay` (`idle_parking: "lobby"`).
+- A jump always lands on the tick grid (a multiple of `dt`).
+
+Contract: fast-forward is an execution optimization only. With it on or off, the
+same config, seed and algorithm must give identical per-passenger board and alight
+times, identical per-elevator statistics and identical summary metrics. The test
+compares the full result, uses `eta` and `idle_parking: "lobby"`, and uses a
+scenario where a jump actually happens (a gap longer than the park delay and the
+re-plan interval).
+
+If profiling shows the full day runs fast enough without it, drop this section.
 
 ### 3.3 Energy (`elevsim/energy.py`, new, plus engine counters)
 
@@ -192,33 +234,42 @@ engine jumps the clock forward and credits the skipped time to idle.
   algorithms against each other, not as an absolute figure. The README and the
   config comments say so.
 - `energy_kwh` is added to `METRICS` (lower is better). Per-elevator energy is in
-  the JSON and kWh per passenger is derived.
+  the JSON, and kWh per passenger is derived (0 when nobody was served).
 
 ### 3.4 Config, API and CLI
 
 - New keys: `employees`, `day_start`, `day_end`, `day_variation`, the shares and times from
   the table above, `energy_model` and the energy constants.
-- Validation: shares in 0-1, times in order, `day_start < day_end`, `employees >= 1`, `max_time` covers
-  the day (see the timeline invariant).
+- Validation in `validate()`: shares in 0-1, times in order,
+  `day_start < day_end`, `employees >= 1`. The `max_time` check happens in
+  `Simulation.__init__` (see the timeline invariant).
 - `office_day` is not a traffic mix like the entries in `TRAFFIC_PATTERNS`, so it
   is registered as a separate scheduler name. `validate()`, the CLI `--traffic`
   choices and the viewer dropdown must all accept it.
 - New `scenarios/office_day.json` (15 floors, 4 cars, capacity 10, 300 employees).
-  `--traffic office_day` works on the CLI.
+- CLI (`elevsim/cli.py`): `--traffic` choices come from `TRAFFIC_PATTERNS` today, so
+  `office_day` is added to the choices; a `--employees` flag is added to the
+  override list; `energy_kwh` is added to the hardcoded `TABLE_METRICS` and
+  `SHORT` so it appears in the compare table.
 - `README.md`: document the new keys and the metric.
 
 ### 3.5 Viewer
 
-- `office_day` appears in the scenario dropdown, and `energy_kwh` shows up in
-  "Whole run" and the Compare charts, which both read `METRICS`.
+- `office_day` appears in the scenario dropdown, and `energy_kwh` is added to the
+  places that hardcode metric lists (see the findings below).
 - The time display and the "people waiting" chart need a full-day clock
   (07:50 instead of 2:20).
 - **Checked in `viewer/app.js` and `viewer_build.py` (2026-10-08):**
-  - Metric labels and units are read generically from `METRICS`, so `energy_kwh`
-    and its unit appear in the Compare table and bar chart without special code.
+  - Only the Compare bar-chart metric selector reads `METRICS` (`DATA.metrics`).
+    The "Whole run" rows (`renderFinal`) and the Compare table columns (`cols`)
+    are hardcoded lists, so `energy_kwh` must be added to both.
+  - `readForm()` sends only the fields in `CFG_FIELDS`, so a preset's other keys
+    (`employees`, `day_*`, `energy_*`) would be silently dropped and a live
+    `office_day` run would use defaults. The traffic `<select>` is static HTML
+    without an `office_day` option, and `fillForm` would leave it empty.
   - The form rejects `passengers` outside 1-3000 (`app.js`, around line 73). For
-    `office_day` it must validate `employees` instead. The derived count of about
-    2,000 for 300 employees is near that cap.
+    `office_day` it validates `employees` instead. The derived count of up to
+    about 2,000 for 300 employees is near that cap.
   - `api.run(record=True)` records a frame every 0.5 s by default. A 13-hour day
     is about 95k frames per run, which is large to build and ship to the browser.
   - `viewer_build.py` lists every file in `scenarios/` as a dropdown preset, but
@@ -228,10 +279,18 @@ engine jumps the clock forward and credits the skipped time to idle.
     interval needs no change to how frames are consumed. Playback advances by
     `dt x speed` per animation step.
 - **Decisions:**
+  - **Form wiring.** `readForm()` starts from the selected preset's full config
+    and overlays the form fields, so non-form keys reach the engine. An
+    `office_day` option is added to the traffic select. For `office_day` the
+    form shows an `employees` input and hides `passengers` and `arrival_rate`,
+    which do not apply.
   - **Frame interval.** Simulation `dt` stays 0.5 s. The viewer trace interval is
     separate. A recorded trace has at most 10,000 frames, counting the initial
-    frame and a possible final frame, so
-    `frame_interval = max(requested, max_time / 9998)`, about 5 s for a full day.
+    frame and a possible final frame. The engine computes
+    `frames_every = ceil(max(requested, horizon / 9998) / dt)` (rounding up, not
+    `round`, which could exceed the cap) and the trace reports the effective
+    interval `frames_every x dt`, not the requested one, because the viewer uses
+    it to locate frames. About 5 s for a full day.
   - **Playback with coarse frames.** The viewer is time-based: playback time
     advances in seconds and `frameAt` finds the surrounding frames. It
     interpolates a car's position only when the car moved at most 1.01 floors
@@ -246,7 +305,10 @@ engine jumps the clock forward and credits the skipped time to idle.
     13-hour day takes about 1.65 hours at 8x and about 25 minutes at 32x, so the
     selector gains faster options (for example 120x and 600x) for a full day.
 - **Still to do in the plan:** the full-day clock format and the "people waiting"
-  chart axis in `app.js`.
+  chart axis in `app.js`. The sparkline uses 400 samples, about 128 s apart over a
+  full day, so its peak label can miss a short peak; accepted for 0.2.0.
+  `liveStats` and `draw` cost O(passengers) per animation frame, which is
+  negligible at about 2,000 passengers.
 
 ### 3.6 Testing (standard library `unittest`, CI matrix 3.10 / 3.12 / 3.13)
 
@@ -256,7 +318,10 @@ engine jumps the clock forward and credits the skipped time to idle.
 - Every employee's trips chain: each from-floor equals the previous destination,
   and the last trip ends in the lobby.
 - Every trip is served in a full run of each strategy on `office_day`.
-- Fast-forward gives metrics identical to the tick-by-tick run.
+- Fast-forward gives a full result (board and alight times, per-elevator stats,
+  summary) identical to the tick-by-tick run, with `eta` and `idle_parking:
+  "lobby"`, on a scenario where a jump happens. It is disabled for non-power-of-two
+  `dt` and for `bottleneck_queue <= 0`.
 - The energy model gives zero for a stationary run and more energy for longer
   trips and heavier loads.
 - Exact raw counters on a tiny scenario: one car, floors 0 -> 2, two passengers,
@@ -264,22 +329,30 @@ engine jumps the clock forward and credits the skipped time to idle.
   `simple` result for known constants.
 - Strategy independence for `office_day` specifically: the passenger list is
   identical for every registered strategy, extending the existing test.
-- Scheduler rules: the realized meeting rate stays at or below the candidate
-  rate, each employee's trips are strictly increasing in time, and
-  `--passengers` with `office_day` is rejected.
-- `max_time`: auto for `office_day` covers the latest arrival plus the drain
-  margin, an explicit smaller value raises `ValueError`, and auto for existing
-  traffic is still 4 hours (a legacy scenario behaves exactly as before).
+- Scheduler rules: the realized meeting rate is at or below the candidate rate
+  and above a lower bound (so the test can fail in both directions), each
+  employee's trips are strictly increasing in time, fixed segments (arrival,
+  lunch, go-home) are never dropped, everyone ends in the lobby, and
+  `--passengers` with `office_day` is rejected. Also run with a non-zero
+  `lobby_floor`.
+- `max_time`: auto for `office_day` covers the latest `Passenger.arrival` plus the
+  drain margin, an explicit smaller value raises `ValueError` in
+  `Simulation.__init__`, `cfg.max_time` is still `None` after a run, `compare()`
+  over several seeds works (each seed resolves its own horizon), and auto for
+  existing traffic is still 4 hours.
 - Frame cap: a full-day recorded run has at most 10,000 frames, including the
-  initial and final frames.
+  initial and final frames, and the reported `frame_interval` equals the effective
+  one. Existing scenarios record exactly the same frames as before.
 
 ## 4. Risks and open questions
 
 - Run time of a full day in the browser (see 3.2).
 - Default shares are guesses until real numbers are supplied.
-- Viewer: trace size, precompute, coarse-frame playback and speed are decided in
-  3.5. Still open for the plan: the passenger cap, and the clock and chart-axis
-  format.
+- Viewer: form wiring, trace size, precompute, coarse-frame playback and speed are
+  decided in 3.5. Still open for the plan: the clock and chart-axis format.
+- Fast-forward touches strategy timers (`eta`), so it is the riskiest engine
+  change. It is optional, disabled in unsupported cases, and guarded by the
+  full-result equivalence test.
 - `max_time` becoming `float | None` changes a public config default. Existing
   scenarios are unaffected (auto means 4 hours), but it is called out in the
   changelog.
