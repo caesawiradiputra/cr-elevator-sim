@@ -1,6 +1,6 @@
 # Full-day office scenario and energy metric: design
 
-Status: **draft v5, four reviews incorporated (three external, one Opus self-review), awaiting user approval**
+Status: **approved (v5); section 3.2 amended on 2026-10-08 after profiling: fast-forward dropped from 0.2.0**
 (brainstorming, architectural path).
 Date: 2026-10-08. Branch: `feat/office-day-scenario`.
 Current version: `0.1.0`. Target version: `0.2.0` (minor: new feature), a plan
@@ -179,48 +179,21 @@ Default day shape (all values are config keys; `±` is the day-level deviation):
 The lunch split and the stay-late share are placeholders. They can be replaced
 with real numbers.
 
-### 3.2 Idle fast-forward (engine, small change)
+### 3.2 Idle fast-forward (dropped from 0.2.0)
 
-A 13-hour day is about 94k ticks per run at `dt = 0.5 s`. Five algorithms times
-several seeds in the browser (Pyodide) could be slow.
+The spec allowed dropping this optimization if a full day ran fast enough without
+it. A throwaway prototype of the scheduler run on the unmodified engine
+(2026-10-08, 300 employees, 15 floors, 4 cars, `dt = 0.5 s`, about 95k ticks)
+took 0.7-1.1 s per full-day run natively for each of the five strategies, over
+seeds 1, 2, 3 and 7. That is fast enough, so 0.2.0 has **no** fast-forward, no
+`skip_idle` strategy hook and no engine timing change. The engine keeps stepping
+every tick.
 
-When all cars are idle, nobody is waiting and the next arrival is far away, the
-engine jumps the clock forward and credits the skipped time to idle.
-
-State that a jump must keep consistent, checked against the engine and the
-strategies:
-
-- **Strategy timers.** `eta` re-plans when `sim.t - _last_replan >= reassign_every`
-  and then resets `_last_replan`, so skipping ticks shifts its re-plan phase and
-  can change later assignments. Strategies get a hook `skip_idle(sim, t_from,
-  t_to)` (default no-op). `eta` overrides it to move `_last_replan` to where
-  tick-by-tick execution would have left it.
-- **Tick counter and frames.** `_tick` advances by the number of skipped ticks. If
-  frames are being recorded, a jump emits only the frames that fall on the
-  effective frame grid (`_tick % frames_every == 0`) inside the skipped range, the
-  same ones a tick-by-tick run would record (the cars are idle, so only the time
-  changes). It never emits one frame per skipped tick, so the recorded trace is
-  identical with and without fast-forward and stays within the 10,000-frame cap.
-  Simulation `dt`, fast-forward (execution speed), `frame_interval` (viewer
-  sampling) and the frame cap (browser limit) are four separate concerns.
-- **Time arithmetic.** `t` advances with `round(t + dt, 9)` and statistics add
-  `dt` per tick, which a single jump of `k x dt` reproduces exactly only when `dt`
-  is a power-of-two fraction (0.5, 0.25, ...). Fast-forward is therefore enabled
-  only for such `dt`; otherwise the engine silently runs tick by tick.
-- **Bottleneck sampling.** With `bottleneck_queue <= 0` every floor counts as
-  bottlenecked even when empty, so fast-forward is also disabled then.
-- **Parking.** A jump stops at the moment an idle car not at the lobby reaches
-  `idle_since + park_delay` (`idle_parking: "lobby"`).
-- A jump always lands on the tick grid (a multiple of `dt`).
-
-Contract: fast-forward is an execution optimization only. With it on or off, the
-same config, seed and algorithm must give identical per-passenger board and alight
-times, identical per-elevator statistics and identical summary metrics. The test
-compares the full result, uses `eta` and `idle_parking: "lobby"`, and uses a
-scenario where a jump actually happens (a gap longer than the park delay and the
-re-plan interval).
-
-If profiling shows the full day runs fast enough without it, drop this section.
+Still to check in the browser (Pyodide is slower than native Python): the plan
+includes a manual timing of one live full-day run. If it is unacceptably slow, the
+optimization comes back as its own change; the constraints found in review are
+kept in `docs/ideas.md` so they are not lost. It becomes mandatory for the 24-hour
+window and multi-day weeks.
 
 ### 3.3 Energy (`elevsim/energy.py`, new, plus engine counters)
 
@@ -255,8 +228,12 @@ If profiling shows the full day runs fast enough without it, drop this section.
 
 ### 3.4 Config, API and CLI
 
-- New keys: `employees`, `day_start`, `day_end`, `day_variation`, the shares and times from
-  the table above, `energy_model` and the energy constants.
+- New keys: `employees`, `day_start`, `day_end`, `day_variation`, `energy_model`,
+  `energy_base` and `energy_per_passenger`, plus one dict key `office` that holds
+  the shares, time windows, rates, durations, minimum gap and drain margin from
+  the table above (unknown keys are rejected, defaults are documented in the
+  README). One dict instead of about 25 flat keys keeps the config and the viewer
+  form readable.
 - Validation in `validate()`: shares in 0-1, times in order,
   `day_start < day_end`, `employees >= 1`. The `max_time` check happens in
   `Simulation.__init__` (see the timeline invariant).
@@ -303,11 +280,14 @@ If profiling shows the full day runs fast enough without it, drop this section.
     which do not apply.
   - **Frame interval.** Simulation `dt` stays 0.5 s. The viewer trace interval is
     separate. A recorded trace has at most 10,000 frames, counting the initial
-    frame and a possible final frame. The engine computes
-    `frames_every = ceil(max(requested, horizon / 9998) / dt)` (rounding up, not
-    `round`, which could exceed the cap) and the trace reports the effective
-    interval `frames_every x dt`, not the requested one, because the viewer uses
-    it to locate frames. About 5 s for a full day.
+    frame and a possible final frame. For `office_day` the engine computes
+    `frames_every = max(round(requested / dt), ceil(horizon / 9997 / dt))`
+    (rounding up for the cap, because `round` could exceed it; 9997 leaves room
+    for the initial frame, the final frame and one tick of slack) and the trace
+    reports the effective interval `frames_every x dt`, not the requested one,
+    because the viewer uses it to locate frames. About 5.5 s for a full day. The
+    cap applies to `office_day` only: with the 4-hour default horizon it would
+    widen the frames of every existing scenario.
   - **Playback with coarse frames.** The viewer is time-based: playback time
     advances in seconds and `frameAt` finds the surrounding frames. It
     interpolates a car's position only when the car moved at most 1.01 floors
@@ -336,10 +316,6 @@ If profiling shows the full day runs fast enough without it, drop this section.
 - Every employee's trips chain: each from-floor equals the previous destination,
   and the last trip ends in the lobby.
 - Every trip is served in a full run of each strategy on `office_day`.
-- Fast-forward gives a full result (board and alight times, per-elevator stats,
-  summary) identical to the tick-by-tick run, with `eta` and `idle_parking:
-  "lobby"`, on a scenario where a jump happens. It is disabled for non-power-of-two
-  `dt` and for `bottleneck_queue <= 0`.
 - The energy model gives zero for a stationary run and more energy for longer
   trips and heavier loads.
 - Exact raw counters on a tiny scenario: one car, floors 0 -> 2, two passengers,
@@ -366,13 +342,11 @@ If profiling shows the full day runs fast enough without it, drop this section.
 
 ## 4. Risks and open questions
 
-- Run time of a full day in the browser (see 3.2).
+- Run time of a full day in the browser (see 3.2: about 1 s native, not yet
+  measured under Pyodide).
 - Default shares are guesses until real numbers are supplied.
 - Viewer: form wiring, trace size, precompute, coarse-frame playback and speed are
   decided in 3.5. Still open for the plan: the clock and chart-axis format.
-- Fast-forward touches strategy timers (`eta`), so it is the riskiest engine
-  change. It is optional, disabled in unsupported cases, and guarded by the
-  full-result equivalence test.
 - `max_time` becoming `float | None` changes a public config default. Existing
   scenarios are unaffected (auto means 4 hours), but it is called out in the
   changelog.

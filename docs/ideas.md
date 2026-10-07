@@ -10,6 +10,20 @@ ships, and add the version and date.
 Add new ideas at the top of their group. One line is enough. Add a source date
 so the thought can be traced back to a conversation.
 
+## Maintenance sessions
+
+Dedicated sessions, separate from feature work. Behavior stays identical: run the
+tests and the CI smoke commands before and after.
+
+- [ ] Refactor session: review module boundaries and size (`engine.py`, `cli.py`,
+  `viewer/app.js`), remove duplication, tighten names. (2026-10-08)
+- [ ] Re-organize session: decide whether the layout still fits (for example a
+  package for scheduling and energy, splitting the viewer script). (2026-10-08)
+- [ ] Documentation session: README, `docs/code-map.md` and docstrings brought up
+  to date with the code, written for a reader new to the codebase. (2026-10-08)
+- [ ] Mentoring walkthrough after each mid or big feature: explain each module and
+  where to find code to check or change by hand. (2026-10-08)
+
 ## Game and reuse
 
 - [ ] Reuse the modelling in a game later: the office-day scheduler as the source
