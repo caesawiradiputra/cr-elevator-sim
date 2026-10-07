@@ -1,6 +1,7 @@
 # Full-day office scenario and energy metric: design
 
-Status: **draft, awaiting user review** (brainstorming, architectural path).
+Status: **draft v2, external review findings incorporated, awaiting user approval**
+(brainstorming, architectural path).
 Date: 2026-10-08. Branch: `feat/office-day-scenario`.
 Current version: `0.1.0`. Target version: `0.2.0` (minor: new feature), a plan
 that can change before release. The bump to `__version__` happens in the last
@@ -69,8 +70,40 @@ Decisions taken in the session:
   overlap another is dropped, never squeezed in.
 - **Clock.** Time 0 is `day_start` (default 06:45). `max_time` is raised so the
   whole day fits.
-- **Passenger count.** The trip count is derived, so `passengers` is ignored for
-  this traffic and `employees` is the user-facing size.
+- **Passenger count.** The trip count is derived (about 7 trips per person, so
+  about 2,000 for 300 employees), and `employees` is the user-facing size. The
+  derived count is written back to `passengers` in the resolved config so results
+  never show a misleading value. The CLI rejects `--passengers` together with
+  `office_day`, instead of silently ignoring it.
+- **Internal representation.** The scheduler builds an `OfficeDay` (day profile,
+  employees, each employee's ordered trips) and then flattens it to the
+  `Passenger` list. The engine boundary does not change, and the timeline logic
+  can be unit-tested without running a simulation.
+
+**Scheduler contract.** The scheduler is a deterministic demand generator:
+
+- For a given config and seed it always produces the same schedule, and the
+  schedule never depends on the strategy.
+- Each employee's trips form a valid location chain (every from-floor equals the
+  previous destination), and the last trip of every employee ends in the lobby.
+- The configured meeting and break rates are **candidate** rates. A candidate
+  that would overlap another segment is discarded, so the realized number of
+  trips can be lower than the configured rate. This is documented, and a test
+  measures the realized rate on a large headcount.
+- Lunch out of the building and lunch in the cafeteria are the same trip to the
+  engine (desk -> floor 0 -> desk). They differ only in the absence duration:
+  out of the building is longer (default 30-60 minutes), cafeteria only is
+  shorter (default 15-40 minutes).
+- **Timeline invariant.** `max_time` is at least the latest generated arrival plus
+  a drain margin (default 1 hour), so no generated trip is cut off. If the
+  user sets a smaller `max_time`, validation fails.
+
+**Day variation contract.** With `day_variation = 0` the configured day-level
+values are used exactly. With a value above 0 each day-level value (late share,
+going-out lunch share, stay-late share, arrival-peak shift) is drawn uniformly
+from `value ± spread x day_variation`, using the seed. Shares are clamped to
+0-1, and the lunch shares are renormalized to sum to 1. The result is
+deterministic and bounded; the exact distribution is an implementation detail.
 
 Default day shape (all values are config keys; `±` is the day-level deviation):
 
@@ -92,19 +125,38 @@ several seeds in the browser (Pyodide) could be slow.
 When all cars are idle, nobody is waiting and the next arrival is far away, the
 engine jumps the clock forward and credits the skipped time to idle.
 
-- Results must be identical to a tick-by-tick run. This is tested on a short scenario.
+- Fast-forward is an execution optimization only. With it on or off, the same
+  config, seed and algorithm must give identical per-passenger board and alight
+  times, identical per-elevator statistics and identical summary metrics. This
+  is tested on a short scenario by comparing the full result, not only the
+  aggregates.
+- A jump always lands on the tick grid (a multiple of `dt`), so the rounding of
+  `t` matches the tick-by-tick run.
 - Parking behaviour (`idle_parking: "lobby"`, `park_delay`) must still happen at
   the correct simulated times, so the jump stops at those moments.
 - If profiling shows the full day runs fast enough without it, drop this section.
 
 ### 3.3 Energy (`elevsim/energy.py`, new, plus engine counters)
 
-- The engine records only raw facts per car: distance moved up and down weighted
-  by load, time idle and time with doors open. These are plain counters on
-  `Elevator`, like `floors_travelled` today.
+- **Energy accounting contract.** The engine records movement as discrete floor
+  transitions. Passengers only board or leave while a car is stopped, so a car's
+  load is constant across one transition. For each car:
+  - `floors_travelled` (exists today): the number of floor transitions, including
+    empty and parking moves.
+  - `loaded_floor_distance` (new): the sum, over every floor transition, of the
+    passenger count on board during it. Load is the passenger count, not a ratio.
+  - idle time and door-open time (opening + loading + closing) already exist in
+    `time_in_state`. They are raw telemetry for future models.
+  - Example: one car, floors 0 -> 1 -> 2, two passengers on board throughout, gives
+    `floors_travelled = 2` and `loaded_floor_distance = 4`.
+- The energy calculation is deterministic and depends on the strategy only
+  through the resulting movement and load.
 - An `EnergyModel` turns the counters into kWh at summary time.
-  - `simple`: `energy = distance x (base + k x load)`, constants configurable.
-    It uses load so that an empty car and a full car are not scored the same.
+  - `simple` (movement energy only):
+    `energy = floors_travelled x base + loaded_floor_distance x per_passenger`,
+    constants configurable. It uses load so that an empty car and a full car are
+    not scored the same. Idle time and door-open time do **not** affect
+    `energy_kwh` in 0.2.0.
   - Later models (`counterweight`, `full`) are new classes plus a change to
     `energy_model`. They need no engine or scheduler change.
 - `energy_kwh` is added to `METRICS` (lower is better). Per-elevator energy is in
@@ -114,7 +166,11 @@ engine jumps the clock forward and credits the skipped time to idle.
 
 - New keys: `employees`, `day_start`, `day_variation`, the shares and times from
   the table above, `energy_model` and the energy constants.
-- Validation: shares in 0-1, times in order, `employees >= 1`.
+- Validation: shares in 0-1, times in order, `employees >= 1`, `max_time` covers
+  the day (see the timeline invariant).
+- `office_day` is not a traffic mix like the entries in `TRAFFIC_PATTERNS`, so it
+  is registered as a separate scheduler name. `validate()`, the CLI `--traffic`
+  choices and the viewer dropdown must all accept it.
 - New `scenarios/office_day.json` (15 floors, 4 cars, capacity 10, 300 employees).
   `--traffic office_day` works on the CLI.
 - `README.md`: document the new keys and the metric.
@@ -125,8 +181,21 @@ engine jumps the clock forward and credits the skipped time to idle.
   "Whole run" and the Compare charts, which both read `METRICS`.
 - The time display and the "people waiting" chart need a full-day clock
   (07:50 instead of 2:20).
-- **Open item:** `viewer/app.js` has not been read in detail yet. This section
-  must be re-checked before the plan is written.
+- **Checked in `viewer/app.js` and `viewer_build.py` (2026-10-08):**
+  - Metric labels and units are read generically from `METRICS`, so `energy_kwh`
+    and its unit appear in the Compare table and bar chart without special code.
+  - The form rejects `passengers` outside 1-3000 (`app.js`, around line 73). For
+    `office_day` it must validate `employees` instead. The derived count of about
+    2,000 for 300 employees is near that cap.
+  - `api.run(record=True)` records a frame every 0.5 s. A 13-hour day is about
+    95k frames per run, which is large to build and ship to the browser. The
+    plan must pick a coarser `frame_interval` for long days.
+  - `viewer_build.py` precomputes runs for every file in `scenarios/` at build
+    time. Adding `scenarios/office_day.json` adds a full-day run per strategy to
+    the build and to the size of `viewer.html`. The plan must decide whether to
+    precompute it or leave it to the live engine.
+- **Still to do in the plan:** the full-day clock format and the "people waiting"
+  chart axis in `app.js`.
 
 ### 3.6 Testing (standard library `unittest`, CI matrix 3.10 / 3.12 / 3.13)
 
@@ -139,12 +208,23 @@ engine jumps the clock forward and credits the skipped time to idle.
 - Fast-forward gives metrics identical to the tick-by-tick run.
 - The energy model gives zero for a stationary run and more energy for longer
   trips and heavier loads.
+- Exact raw counters on a tiny scenario: one car, floors 0 -> 2, two passengers,
+  gives `floors_travelled = 2` and `loaded_floor_distance = 4`, and the exact
+  `simple` result for known constants.
+- Strategy independence for `office_day` specifically: the passenger list is
+  identical for every registered strategy, extending the existing test.
+- Scheduler rules: the `max_time` invariant, the realized meeting rate stays
+  at or below the candidate rate, and `--passengers` with `office_day` is rejected.
 
 ## 4. Risks and open questions
 
 - Run time of a full day in the browser (see 3.2).
 - Default shares are guesses until real numbers are supplied.
-- Viewer changes are not yet scoped (see 3.5).
+- Viewer: trace size for a full day, build-time precompute of `office_day`, and
+  the passenger cap are known risks (see 3.5). The clock and chart changes are
+  not yet scoped.
+- The default shares are placeholders, not real office statistics. The README
+  should say so.
 - The `simple` energy constants are arbitrary units until calibrated, so absolute
   kWh values are only meaningful for comparing algorithms against each other.
 
