@@ -68,17 +68,23 @@ Decisions taken in the session:
 - **Consistency.** Segments for one person are laid out sequentially, so a trip's
   from-floor always equals where the person is. A random segment that would
   overlap another is dropped, never squeezed in.
-- **Clock.** Time 0 is `day_start` (default 06:45). `max_time` is derived so the
-  whole day fits (see the timeline invariant below).
+- **Clock.** Time 0 is `day_start` (default 06:45). The day window is the config
+  pair `day_start` and `day_end` (default 20:00, the latest planned departure),
+  not hard-coded times, so a longer window such as 00:00-23:59 is a config
+  change (see Future work). Every generated trip falls inside the window.
+  `max_time` is derived so the whole day fits (see the timeline invariant below).
 - **Passenger count.** The trip count is derived (about 7 trips per person, so
   about 2,000 for 300 employees), and `employees` is the user-facing size. The
   derived count is written back to `passengers` in the resolved config so results
   never show a misleading value. The CLI rejects `--passengers` together with
   `office_day`, instead of silently ignoring it.
-- **Internal representation.** The scheduler builds an `OfficeDay` (day profile,
-  employees, each employee's ordered trips) and then flattens it to the
-  `Passenger` list. The engine boundary does not change, and the timeline logic
-  can be unit-tested without running a simulation.
+- **Internal representation.** Employees (id and fixed desk floor) are created
+  separately from any day's trips. An `OfficeDay` is one day built from those
+  employees: the day profile and each employee's ordered trips, with a
+  `day_index` that defaults to 0. The scheduler flattens it to the `Passenger`
+  list. The engine boundary does not change, and the timeline logic can be
+  unit-tested without running a simulation. A multi-day week later becomes a loop
+  over `OfficeDay` with the same employees (see Future work).
 
 **Scheduler contract.** The scheduler is a deterministic demand generator:
 
@@ -178,9 +184,9 @@ engine jumps the clock forward and credits the skipped time to idle.
 
 ### 3.4 Config, API and CLI
 
-- New keys: `employees`, `day_start`, `day_variation`, the shares and times from
+- New keys: `employees`, `day_start`, `day_end`, `day_variation`, the shares and times from
   the table above, `energy_model` and the energy constants.
-- Validation: shares in 0-1, times in order, `employees >= 1`, `max_time` covers
+- Validation: shares in 0-1, times in order, `day_start < day_end`, `employees >= 1`, `max_time` covers
   the day (see the timeline invariant).
 - `office_day` is not a traffic mix like the entries in `TRAFFIC_PATTERNS`, so it
   is registered as a separate scheduler name. `validate()`, the CLI `--traffic`
@@ -271,8 +277,31 @@ engine jumps the clock forward and credits the skipped time to idle.
 - Counterweight, regeneration and standby-power energy models. The design leaves
   room for them, but they are not built now.
 - Pre-generated trace files.
+- Night and early-morning groups (security rounds, cleaners), a 24-hour window,
+  multi-day weeks, and attendance states (holiday, sick, half day, truant). All
+  are planned; see Future work.
 
-## 6. Next steps
+## 6. Future work
+
+Planned follow-ups, in order. The versions are intentions that can change, and
+each one gets its own brainstorming and spec when it starts. Only the hooks
+listed here are built in 0.2.0: the `day_start` / `day_end` window and the
+`Employee` / `OfficeDay` split with `day_index`.
+
+| Target | Feature | Notes |
+| --- | --- | --- |
+| 0.3.0 | 24-hour window (00:00-23:59) with night groups | Security checks and cleaners as another group of actors with their own trip pattern, feeding the same scheduler. Cosmetic for algorithm ranking alone, but it becomes meaningful with a fuller energy model that counts idle and standby power over the night. Idle fast-forward (3.2) becomes mandatory, not optional. |
+| 0.3.0 | Fuller energy model (`counterweight`, standby and door power) | Uses the raw telemetry already collected in 0.2.0. |
+| 0.4.0 | Multi-day weeks | Employees persist across days. Each day has a day type (workday, holiday, weekend) and each employee an attendance state for that day (present, absent or sick, half day morning or afternoon, late, truant). Needs day numbers in the viewer clock, a rethink of the frame cap and the passenger cap, and per-day metrics. |
+
+Open questions for those releases, not for 0.2.0:
+
+- Whether attendance states are drawn per employee per day or follow longer
+  streaks (a sick person stays out for several days).
+- Whether night groups are modeled as employees with a different `group` or as a
+  separate generator.
+
+## 7. Next steps
 
 1. User reviews this spec.
 2. After approval, invoke `writing-plans` to produce the implementation plan.
