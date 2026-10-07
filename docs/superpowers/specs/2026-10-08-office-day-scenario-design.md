@@ -100,18 +100,30 @@ Decisions taken in the session:
   engine (desk -> floor 0 -> desk). They differ only in the absence duration:
   out of the building is longer (default 30-60 minutes), cafeteria only is
   shorter (default 15-40 minutes).
-- **Timeline invariant.** `max_time` is at least the latest generated arrival plus
-  a drain margin (default 1 hour), so no generated trip is cut off.
+- **Timeline invariant.** `max_time` is at least the latest generated
+  `Passenger.arrival` plus a drain margin (default 1 hour), so no generated trip
+  is cut off. `Passenger.arrival` is the moment the person presses the hall
+  button, which the scheduler knows before the simulation runs (it is not the
+  time the person reaches the destination). `day_end` limits when the scheduler
+  may generate demand; `max_time` is the simulation horizon needed to finish
+  serving it. Example: the latest request at 19:57 and a 1-hour margin give a
+  `max_time` equal to 20:57.
   - `max_time` changes from a fixed `4 * 3600.0` to `float | None = None`, meaning
     "auto". The engine reads it in one place (`engine.py`, the `run` loop).
   - Auto for existing traffic is exactly the old 4 hours, so current scenarios
-    behave identically. Auto for `office_day` is the latest arrival plus the drain
-    margin.
+    behave identically. Auto for `office_day` is the latest `Passenger.arrival` plus the
+    drain margin.
   - An explicit `max_time` is never overridden. If it is smaller than the
     `office_day` requirement, generation raises a `ValueError` naming both values.
-- **Temporal order.** Within one employee's trips, each trip's arrival time is
-  after the previous trip's arrival time plus a minimum gap (default 60 s) for the
-  activity in between, so the order is strictly increasing.
+- **Temporal order.** Within one employee's trips, each trip's `Passenger.arrival`
+  is after the previous trip's `Passenger.arrival` plus a minimum gap (default
+  300 s), so the order is strictly increasing. The scheduler cannot know ride
+  times, so the gap is a proxy for "the person has arrived and spent some time
+  there". A test measures how often a next request would come before the previous
+  trip's actual `alight` time in a full run; the plan sets the accepted threshold.
+- **Boundary check.** `Passenger` (`elevsim/model.py`) carries `id`, `arrival`,
+  `origin` and `dest`, with the direction derived. That is all the scheduler
+  needs to emit, so no engine-side model change is required.
 
 **Day variation contract.** With `day_variation = 0` the configured day-level
 values are used exactly. With a value above 0 each day-level value (late share,
@@ -217,17 +229,22 @@ engine jumps the clock forward and credits the skipped time to idle.
     `dt x speed` per animation step.
 - **Decisions:**
   - **Frame interval.** Simulation `dt` stays 0.5 s. The viewer trace interval is
-    separate and is chosen so a run has at most about 10,000 frames:
-    `frame_interval = max(requested, max_time / 10000)`, about 5 s for a full day.
-    Whether the viewer interpolates car positions between frames is to be
-    checked in the plan; if it does not, the animation needs it for 5 s frames.
+    separate. A recorded trace has at most 10,000 frames, counting the initial
+    frame and a possible final frame, so
+    `frame_interval = max(requested, max_time / 9998)`, about 5 s for a full day.
+  - **Playback with coarse frames.** The viewer is time-based: playback time
+    advances in seconds and `frameAt` finds the surrounding frames. It
+    interpolates a car's position only when the car moved at most 1.01 floors
+    between frames, otherwise it snaps. With 5 s frames, moving cars will snap
+    between positions. This is accepted for 0.2.0; smoother animation is an idea
+    in `docs/ideas.md`.
   - **Build precompute.** `office_day` is excluded from precompute even under
     `demo_all`, through a `NO_PRECOMPUTE` set in `viewer_build.py`. Its dropdown
     preset still exists and runs on the live Pyodide engine. Without the engine
     the viewer shows its existing "pick a precomputed scenario" message.
-  - **Playback speed.** At the current top speed of 8x a 13-hour day takes more
-    than 1.5 hours to watch, so the speed selector gains faster options (for
-    example 60x and 300x) when the scenario is a full day.
+  - **Playback speed.** The selector offers 1x to 32x, with 8x as the default. A
+    13-hour day takes about 1.65 hours at 8x and about 25 minutes at 32x, so the
+    selector gains faster options (for example 120x and 600x) for a full day.
 - **Still to do in the plan:** the full-day clock format and the "people waiting"
   chart axis in `app.js`.
 
@@ -253,15 +270,16 @@ engine jumps the clock forward and credits the skipped time to idle.
 - `max_time`: auto for `office_day` covers the latest arrival plus the drain
   margin, an explicit smaller value raises `ValueError`, and auto for existing
   traffic is still 4 hours (a legacy scenario behaves exactly as before).
-- Frame cap: a full-day recorded run has at most about 10,000 frames.
+- Frame cap: a full-day recorded run has at most 10,000 frames, including the
+  initial and final frames.
 
 ## 4. Risks and open questions
 
 - Run time of a full day in the browser (see 3.2).
 - Default shares are guesses until real numbers are supplied.
-- Viewer: trace size, precompute and playback speed are decided in 3.5. Still open
-  for the plan: whether the viewer interpolates between 5 s frames, the
-  passenger cap, and the clock and chart-axis format.
+- Viewer: trace size, precompute, coarse-frame playback and speed are decided in
+  3.5. Still open for the plan: the passenger cap, and the clock and chart-axis
+  format.
 - `max_time` becoming `float | None` changes a public config default. Existing
   scenarios are unaffected (auto means 4 hours), but it is called out in the
   changelog.

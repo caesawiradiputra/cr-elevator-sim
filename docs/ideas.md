@@ -36,8 +36,9 @@ so the thought can be traced back to a conversation.
 
 ## Viewer
 
-- [ ] Interpolate car positions between sparse frames (needed for 5 s frames on a
-  full day, if the viewer does not already). (2026-10-08)
+- [ ] Smoother animation between sparse frames. The viewer interpolates a car only
+  when it moved at most 1.01 floors between frames, so 5 s frames on a full day
+  snap. (2026-10-08)
 - [ ] Full-day clock (HH:MM) and chart axis in the viewer. (2026-10-08)
 
 ## Engine and behavior (probably rejected, kept so the reason is not lost)
