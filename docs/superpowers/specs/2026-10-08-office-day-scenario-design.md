@@ -1,6 +1,6 @@
 # Full-day office scenario and energy metric: design
 
-Status: **draft v2, external review findings incorporated, awaiting user approval**
+Status: **draft v3, two external reviews incorporated, awaiting user approval**
 (brainstorming, architectural path).
 Date: 2026-10-08. Branch: `feat/office-day-scenario`.
 Current version: `0.1.0`. Target version: `0.2.0` (minor: new feature), a plan
@@ -68,8 +68,8 @@ Decisions taken in the session:
 - **Consistency.** Segments for one person are laid out sequentially, so a trip's
   from-floor always equals where the person is. A random segment that would
   overlap another is dropped, never squeezed in.
-- **Clock.** Time 0 is `day_start` (default 06:45). `max_time` is raised so the
-  whole day fits.
+- **Clock.** Time 0 is `day_start` (default 06:45). `max_time` is derived so the
+  whole day fits (see the timeline invariant below).
 - **Passenger count.** The trip count is derived (about 7 trips per person, so
   about 2,000 for 300 employees), and `employees` is the user-facing size. The
   derived count is written back to `passengers` in the resolved config so results
@@ -95,8 +95,17 @@ Decisions taken in the session:
   out of the building is longer (default 30-60 minutes), cafeteria only is
   shorter (default 15-40 minutes).
 - **Timeline invariant.** `max_time` is at least the latest generated arrival plus
-  a drain margin (default 1 hour), so no generated trip is cut off. If the
-  user sets a smaller `max_time`, validation fails.
+  a drain margin (default 1 hour), so no generated trip is cut off.
+  - `max_time` changes from a fixed `4 * 3600.0` to `float | None = None`, meaning
+    "auto". The engine reads it in one place (`engine.py`, the `run` loop).
+  - Auto for existing traffic is exactly the old 4 hours, so current scenarios
+    behave identically. Auto for `office_day` is the latest arrival plus the drain
+    margin.
+  - An explicit `max_time` is never overridden. If it is smaller than the
+    `office_day` requirement, generation raises a `ValueError` naming both values.
+- **Temporal order.** Within one employee's trips, each trip's arrival time is
+  after the previous trip's arrival time plus a minimum gap (default 60 s) for the
+  activity in between, so the order is strictly increasing.
 
 **Day variation contract.** With `day_variation = 0` the configured day-level
 values are used exactly. With a value above 0 each day-level value (late share,
@@ -159,6 +168,11 @@ engine jumps the clock forward and credits the skipped time to idle.
     `energy_kwh` in 0.2.0.
   - Later models (`counterweight`, `full`) are new classes plus a change to
     `energy_model`. They need no engine or scheduler change.
+- The metric keeps the name `energy_kwh` because kWh is the intended unit. In
+  0.2.0 the `simple` constants are calibration parameters, not physical
+  measurements, so the value is a **comparative estimate**: meaningful for ranking
+  algorithms against each other, not as an absolute figure. The README and the
+  config comments say so.
 - `energy_kwh` is added to `METRICS` (lower is better). Per-elevator energy is in
   the JSON and kWh per passenger is derived.
 
@@ -187,13 +201,27 @@ engine jumps the clock forward and credits the skipped time to idle.
   - The form rejects `passengers` outside 1-3000 (`app.js`, around line 73). For
     `office_day` it must validate `employees` instead. The derived count of about
     2,000 for 300 employees is near that cap.
-  - `api.run(record=True)` records a frame every 0.5 s. A 13-hour day is about
-    95k frames per run, which is large to build and ship to the browser. The
-    plan must pick a coarser `frame_interval` for long days.
-  - `viewer_build.py` precomputes runs for every file in `scenarios/` at build
-    time. Adding `scenarios/office_day.json` adds a full-day run per strategy to
-    the build and to the size of `viewer.html`. The plan must decide whether to
-    precompute it or leave it to the live engine.
+  - `api.run(record=True)` records a frame every 0.5 s by default. A 13-hour day
+    is about 95k frames per run, which is large to build and ship to the browser.
+  - `viewer_build.py` lists every file in `scenarios/` as a dropdown preset, but
+    precomputes runs and a 5-seed comparison only for `DEMO_PRESET`
+    (`office_lunch`), or for all presets with `demo_all`.
+  - The viewer reads `trace.frame_interval` from the result, so a coarser
+    interval needs no change to how frames are consumed. Playback advances by
+    `dt x speed` per animation step.
+- **Decisions:**
+  - **Frame interval.** Simulation `dt` stays 0.5 s. The viewer trace interval is
+    separate and is chosen so a run has at most about 10,000 frames:
+    `frame_interval = max(requested, max_time / 10000)`, about 5 s for a full day.
+    Whether the viewer interpolates car positions between frames is to be
+    checked in the plan; if it does not, the animation needs it for 5 s frames.
+  - **Build precompute.** `office_day` is excluded from precompute even under
+    `demo_all`, through a `NO_PRECOMPUTE` set in `viewer_build.py`. Its dropdown
+    preset still exists and runs on the live Pyodide engine. Without the engine
+    the viewer shows its existing "pick a precomputed scenario" message.
+  - **Playback speed.** At the current top speed of 8x a 13-hour day takes more
+    than 1.5 hours to watch, so the speed selector gains faster options (for
+    example 60x and 300x) when the scenario is a full day.
 - **Still to do in the plan:** the full-day clock format and the "people waiting"
   chart axis in `app.js`.
 
@@ -213,20 +241,28 @@ engine jumps the clock forward and credits the skipped time to idle.
   `simple` result for known constants.
 - Strategy independence for `office_day` specifically: the passenger list is
   identical for every registered strategy, extending the existing test.
-- Scheduler rules: the `max_time` invariant, the realized meeting rate stays
-  at or below the candidate rate, and `--passengers` with `office_day` is rejected.
+- Scheduler rules: the realized meeting rate stays at or below the candidate
+  rate, each employee's trips are strictly increasing in time, and
+  `--passengers` with `office_day` is rejected.
+- `max_time`: auto for `office_day` covers the latest arrival plus the drain
+  margin, an explicit smaller value raises `ValueError`, and auto for existing
+  traffic is still 4 hours (a legacy scenario behaves exactly as before).
+- Frame cap: a full-day recorded run has at most about 10,000 frames.
 
 ## 4. Risks and open questions
 
 - Run time of a full day in the browser (see 3.2).
 - Default shares are guesses until real numbers are supplied.
-- Viewer: trace size for a full day, build-time precompute of `office_day`, and
-  the passenger cap are known risks (see 3.5). The clock and chart changes are
-  not yet scoped.
+- Viewer: trace size, precompute and playback speed are decided in 3.5. Still open
+  for the plan: whether the viewer interpolates between 5 s frames, the
+  passenger cap, and the clock and chart-axis format.
+- `max_time` becoming `float | None` changes a public config default. Existing
+  scenarios are unaffected (auto means 4 hours), but it is called out in the
+  changelog.
 - The default shares are placeholders, not real office statistics. The README
   should say so.
-- The `simple` energy constants are arbitrary units until calibrated, so absolute
-  kWh values are only meaningful for comparing algorithms against each other.
+- The `simple` energy constants are uncalibrated, so `energy_kwh` is a comparative
+  estimate (see 3.3).
 
 ## 5. Out of scope
 

@@ -24,6 +24,8 @@ when `dev` is promoted. Each entry links to its design spec when there is one.
   trips, an evening exodus with some staying late, and per-run day variation.
 - Energy metric (`energy_kwh`) with a replaceable `EnergyModel`, starting with a
   simple load-weighted distance model.
+- `max_time` default becomes `None` (auto): 4 hours for existing traffic, as before,
+  and derived from the latest arrival for `office_day`.
 - Design: `docs/superpowers/specs/2026-10-08-office-day-scenario-design.md`
 
 ## [0.1.0] - 2026-10-06
