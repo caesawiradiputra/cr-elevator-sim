@@ -10,6 +10,12 @@ ships, and add the version and date.
 Add new ideas at the top of their group. One line is enough. Add a source date
 so the thought can be traced back to a conversation.
 
+## Game and reuse
+
+- [ ] Reuse the modelling in a game later: the office-day scheduler as the source
+  of randomized passengers, and/or the engine and strategies as the elevator
+  logic (for example, the player writes or picks a strategy). (2026-10-08)
+
 ## Traffic and scenarios
 
 - [ ] Night and early-morning users (security checks, cleaners) as another group
