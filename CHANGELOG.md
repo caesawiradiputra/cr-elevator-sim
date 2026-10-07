@@ -10,6 +10,12 @@ All notable changes are listed here, newest first. The version lives in
 | Bug fix, docs or config only | patch (`0.2.0` to `0.2.1`) |
 | Breaking change to config keys or JSON output | minor while in 0.x |
 
+The minor number is a plain counter that grows by one per release and may go
+well past 9 (`0.25.0`, `0.37.0`, even `0.100.0`) before `1.0.0`. Versions record
+release order, not feature order, so planned ideas (see `docs/ideas.md`) carry no
+version until they ship. `1.0.0` is a deliberate decision, made when the config
+and output formats are stable enough to promise compatibility.
+
 The version is bumped in the last commit of the implementation branch, so the
 PR into `dev` is complete when it is opened. The git tag is created on `main`
 when `dev` is promoted. Each entry links to its design spec when there is one.

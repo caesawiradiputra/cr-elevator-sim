@@ -283,18 +283,28 @@ engine jumps the clock forward and credits the skipped time to idle.
 
 ## 6. Future work
 
-Planned follow-ups, in order. The versions are intentions that can change, and
-each one gets its own brainstorming and spec when it starts. Only the hooks
-listed here are built in 0.2.0: the `day_start` / `day_end` window and the
-`Employee` / `OfficeDay` split with `day_index`.
+Later ideas live in `docs/ideas.md`, an unordered list with no versions. Nothing
+there has an order or a promise to be built, and each idea gets its own
+brainstorming and spec when it is picked up. A version is assigned when a feature
+ships, in release order (see `CHANGELOG.md`).
 
-| Target | Feature | Notes |
-| --- | --- | --- |
-| 0.3.0 | 24-hour window (00:00-23:59) with night groups | Security checks and cleaners as another group of actors with their own trip pattern, feeding the same scheduler. Cosmetic for algorithm ranking alone, but it becomes meaningful with a fuller energy model that counts idle and standby power over the night. Idle fast-forward (3.2) becomes mandatory, not optional. |
-| 0.3.0 | Fuller energy model (`counterweight`, standby and door power) | Uses the raw telemetry already collected in 0.2.0. |
-| 0.4.0 | Multi-day weeks | Employees persist across days. Each day has a day type (workday, holiday, weekend) and each employee an attendance state for that day (present, absent or sick, half day morning or afternoon, late, truant). Needs day numbers in the viewer clock, a rethink of the frame cap and the passenger cap, and per-day metrics. |
+The ideas most related to this feature:
 
-Open questions for those releases, not for 0.2.0:
+- Night and early-morning users (security checks, cleaners) and a 24-hour window.
+  Cosmetic for algorithm ranking alone, but meaningful with a fuller energy model
+  that counts idle and standby power. Idle fast-forward (3.2) would become
+  mandatory, not optional.
+- A fuller energy model (`counterweight`, standby and door power), using the raw
+  telemetry already collected in this release.
+- Multi-day weeks. Employees persist across days. Each day has a day type
+  (workday, holiday, weekend) and each employee an attendance state (present,
+  absent or sick, half day, late, truant). Needs day numbers in the viewer clock,
+  a rethink of the frame and passenger caps, and per-day metrics.
+
+Built now as hooks: the `day_start` / `day_end` window and the `Employee` /
+`OfficeDay` split with `day_index`.
+
+Open questions for those ideas, not for this release:
 
 - Whether attendance states are drawn per employee per day or follow longer
   streaks (a sick person stays out for several days).
