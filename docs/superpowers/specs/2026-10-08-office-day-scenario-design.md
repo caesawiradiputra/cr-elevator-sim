@@ -1,6 +1,6 @@
 # Full-day office scenario and energy metric: design
 
-Status: **approved (v5); section 3.2 amended on 2026-10-08 after profiling: fast-forward dropped from 0.2.0**
+Status: **approved (v5); amended on 2026-10-08 while planning: 3.2 (fast-forward dropped after profiling), 3.4 (`office` dict instead of flat keys), 3.5 (frame cap divisor 9997, `office_day` only). The amendments need the user's confirmation.**
 (brainstorming, architectural path).
 Date: 2026-10-08. Branch: `feat/office-day-scenario`.
 Current version: `0.1.0`. Target version: `0.2.0` (minor: new feature), a plan

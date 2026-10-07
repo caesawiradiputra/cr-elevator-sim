@@ -19,6 +19,10 @@ tests and the CI smoke commands before and after.
   `viewer/app.js`), remove duplication, tighten names. (2026-10-08)
 - [ ] Re-organize session: decide whether the layout still fits (for example a
   package for scheduling and energy, splitting the viewer script). (2026-10-08)
+- [ ] Tech decisions session: lock the technology, modules and versions in use (Python 3.10/3.12/3.13,
+  standard library only, Pyodide 0.26.4, GitHub Actions versions, Node for the JS syntax check,
+  the unpinned `@playwright/mcp@latest`) in a `docs/tech-stack.md`, and write the upgrade strategy:
+  when and how each is bumped, what to test, who decides. (2026-10-08)
 - [ ] Documentation session: README, `docs/code-map.md` and docstrings brought up
   to date with the code, written for a reader new to the codebase. (2026-10-08)
 - [ ] Mentoring walkthrough after each mid or big feature: explain each module and
@@ -32,6 +36,14 @@ tests and the CI smoke commands before and after.
 
 ## Traffic and scenarios
 
+- [ ] Elevators that do not serve every floor: a car-park shuttle (car park to lobby only) with a
+  separate bank from the lobby upward, and high-rise serial banks (floors 1-50, 50-100, with a sky
+  lobby). The engine today assumes every car serves every floor (`_can_continue` uses
+  0..top_floor, strategies assume all cars reach all calls), so each car would need a served floor
+  range. Caveat: a passenger who must transfer is two legs, and the second leg's arrival depends
+  on when the first finished, which would make traffic depend on the strategy, against the
+  "identical traffic for every algorithm" rule. It would have to be modeled as a chained passenger
+  inside the engine. (2026-10-08)
 - [ ] More than one entry and exit floor: trips that start or end at a basement (underground
   car park) as well as the lobby. Note: the engine already handles floors below the lobby
   (floor 0 is just the lowest floor and `lobby_floor` can be 1 or more), so the missing part is
@@ -52,6 +64,16 @@ tests and the CI smoke commands before and after.
 - [ ] Regeneration when a heavy car descends or a light one climbs. (2026-10-08)
 - [ ] Calibrate the `simple` model constants against real figures so `energy_kwh`
   becomes an absolute number, not only a comparative one. (2026-10-08)
+
+## Engine performance
+
+- [ ] Idle fast-forward: when all cars are idle and nothing is waiting, jump the clock to the next
+  event. Dropped from 0.2.0 because a full-day run takes about 1 s natively (2026-10-08 profiling).
+  Needed for the 24-hour window and multi-day weeks. Constraints found in review: strategies with
+  timers need a hook (`eta` re-plans on `sim.t`), the tick counter and the frames on the frame grid
+  must still advance, `dt` must be a power of two for exact time sums, `bottleneck_queue` must be at
+  least 1, parking (`park_delay`) must still fire on time, and the result must equal the
+  tick-by-tick run exactly (compare per-passenger times, per-car stats and summary). (2026-10-08)
 
 ## Viewer
 

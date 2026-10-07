@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-08-office-day-scenario-design.md` (approved v5, section 3.2 amended: fast-forward is **not** part of this plan). Read it before starting.
 
-**Branch:** work continues on `feat/office-day-scenario` (already created from `dev`; it holds the spec, this plan, `CHANGELOG.md` and `docs/ideas.md`). Do not commit to `dev` or `main` directly.
+**Branch:** work continues on `feat/office-day-scenario` (it holds the spec, this plan, `CHANGELOG.md` and `docs/ideas.md`). It was rebased onto `origin/dev` after PR #2 (workspace config: `CLAUDE.md`, `.mcp.json`, `.claude/`) merged. Before Task 1 run `git fetch origin && git ls-files CLAUDE.md .mcp.json`; if either is missing, or `origin/dev` has moved, run `git rebase origin/dev` first (the branch is local only, so rebasing is safe) and re-check that the `tests.yml` and `CLAUDE.md` anchors in Task 8 still match. Do not commit to `dev` or `main` directly.
 
 ## Global Constraints
 
@@ -25,12 +25,13 @@
 - `office_day` rules fixed by the spec: `day_start` default `06:45`, `day_end` default `20:00`; default `min_trip_gap_s` 600; drain margin 3600 s; `max_time` default becomes `None` (auto); `cfg.passengers` is ignored for `office_day` and the config is never mutated; the trace cap applies to `office_day` only and is at most 10,000 frames including the initial and final frame.
 - `energy_kwh` is a **comparative estimate** in 0.2.0 (uncalibrated constants). Say so in the README and config comments.
 
-## Deviations from the spec (decided while planning, tell the user)
+## Deviations from the spec (need the user's approval before execution)
 
 1. **Fast-forward dropped.** A prototype run on the unmodified engine took 0.7-1.1 s per full-day run (300 employees, all five strategies). The spec allowed dropping it. Spec section 3.2 was amended.
 2. **`office` dict.** The shares, windows, rates and durations live in one dict key `office` (defaults in `OFFICE_DEFAULTS`), not about 25 flat keys. Spec section 3.4 was amended.
 3. **Frame cap divisor 9997 and `office_day` only.** The spec's `max_time / 9998` on the 4-hour legacy default would widen the frames of every existing scenario, contradicting its own "existing scenarios unchanged" test. Spec section 3.5 was amended.
 4. **Scheduling bound.** Optional round trips must lie inside `[arrival + gap, go_home - gap]`; the prototype and spec text only checked overlaps, which would let a custom config schedule a meeting before arrival or after going home.
+5. **"Reported for every strategy"** (spec 3.1, request-vs-alight share) is implemented as a line printed in the test output; only `eta` and `collective` are asserted (at most 1%, over 5 seeds as the spec says).
 
 ## Measured baseline (prototype, 2026-10-08; use to sanity-check your implementation)
 
@@ -918,18 +919,18 @@ class OrderingTests(unittest.TestCase):
         return bad / pairs
 
     def test_eta_and_collective_stay_within_one_percent(self):
-        for seed in (1, 2):
+        for seed in range(1, 6):
             cfg = office(employees=300, seed=seed)
             for name in ("eta", "collective"):
                 with self.subTest(seed=seed, strategy=name):
                     self.assertLessEqual(self._violation_share(cfg, name), 0.01)  # prototype: 0
 
-    def test_share_is_computable_for_every_strategy(self):
+    def test_share_is_reported_for_every_strategy(self):
         cfg = office(employees=300, seed=1)
-        for name in STRATEGIES:
-            with self.subTest(strategy=name):
-                share = self._violation_share(cfg, name)
-                self.assertTrue(0.0 <= share <= 1.0)
+        shares = {name: self._violation_share(cfg, name) for name in STRATEGIES}
+        print(f"\nrequest-before-alight share by strategy (seed 1): {shares}")
+        for name, share in shares.items():
+            self.assertTrue(0.0 <= share <= 1.0, name)
 
 
 if __name__ == "__main__":
@@ -1675,7 +1676,7 @@ The viewer loads Pyodide from the jsDelivr CDN, so this needs network.
 4. Choose the "Office full day" scenario. Check: the Employees field is visible; Passengers and Arrivals / min are hidden; Traffic pattern shows "Office full day (employees)".
 5. Click "Run simulation". **Record how long the live full-day run takes** (this is the Pyodide timing the spec left open; native is about 1 s). Expected: it finishes; if it takes more than about 30 s, report it to the user as a decision point (the fast-forward optimization in `docs/ideas.md` would come back) instead of "fixing" it here.
 6. Check: the clock shows `HH:MM` (for example `06:45` at the start), "Whole run" has an "Energy (est.)" row, the speed selector has 120× and 600×, and the console has no errors except the favicon 404.
-7. Open the Compare tab, run 1 seed for the office scenario, and confirm the table has an "Energy use (estimate) (kWh)" column.
+7. Open the Compare tab for the office scenario and confirm the table has an "Energy use (estimate) (kWh)" column. Run it with 1 seed, then **time it at the default 5 seeds** (5 algorithms x 5 seeds = 25 full-day runs under Pyodide, the slow path users will actually hit) and treat the result as the same decision point as step 5: report it, do not optimize it here.
 8. Take a screenshot for the user and stop the server.
 
 - [ ] **Step 7: Commit**
@@ -1787,7 +1788,7 @@ PYEOF
 
 - [ ] **Step 2: Create `docs/code-map.md`**
 
-```markdown
+````markdown
 # Code map
 
 Where things live, for reading or changing the code by hand. Names point to
@@ -1844,7 +1845,7 @@ config (JSON scenario / CLI flags / viewer form)
 - Traffic depends on the config and seed only, never on the strategy (`tests/test_engine.py`, `tests/test_office_day.py`).
 - Standard library only; importable under Pyodide and Python 3.10, 3.12, 3.13.
 - The config is never changed by a run: derived values (trip count, horizon) are reported in the summary.
-```
+````
 
 - [ ] **Step 3: Version, changelog, ideas and CI**
 
@@ -1895,27 +1896,12 @@ release = f"""## [Unreleased]
 """
 open(p, "w").write(s[:a] + release + s[b:])
 
-# ideas: shipped item, and the fast-forward idea with its constraints
+# ideas: mark the shipped item (the fast-forward idea was added earlier, with the spec amendment)
 p = "docs/ideas.md"
 s = open(p).read()
 old = "- [ ] Full-day clock (HH:MM) and chart axis in the viewer. (2026-10-08)"
 new = ("- [x] Full-day clock (HH:MM) in the viewer. Shipped in 0.2.0. The sparkline has no time\n"
        "  axis; adding one is still open. (2026-10-08)")
-assert s.count(old) == 1
-s = s.replace(old, new, 1)
-old = "## Viewer\n"
-new = """## Engine performance
-
-- [ ] Idle fast-forward: when all cars are idle and nothing is waiting, jump the clock to the next
-  event. Dropped from 0.2.0 because a full-day run takes about 1 s natively (2026-10-08 profiling).
-  Needed for the 24-hour window and multi-day weeks. Constraints found in review: strategies with
-  timers need a hook (`eta` re-plans on `sim.t`), the tick counter and the frames on the frame grid
-  must still advance, `dt` must be a power of two for exact time sums, `bottleneck_queue` must be at
-  least 1, parking (`park_delay`) must still fire on time, and the result must equal the
-  tick-by-tick run exactly (compare per-passenger times, per-car stats and summary). (2026-10-08)
-
-## Viewer
-"""
 assert s.count(old) == 1
 open(p, "w").write(s.replace(old, new, 1))
 
