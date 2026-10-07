@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from collections import deque
 
-from .config import SimConfig
+from .config import DEFAULT_MAX_TIME, SimConfig
 from .model import (
     CLOSING, DOWN, IDLE, LOADING, MOVING, NONE, OPENING, STATE_CODES, UP,
     Elevator, HallCall, Passenger,
@@ -32,6 +32,7 @@ class Simulation:
         self.cfg = cfg.validate()
         self.strategy = strategy
         self.passengers = passengers if passengers is not None else generate_passengers(cfg)
+        self.horizon = self._resolve_horizon()
         self._pending = deque(sorted(self.passengers, key=lambda p: p.arrival))
         self.queues: dict[tuple[int, int], deque[Passenger]] = {
             (f, d): deque() for f in range(cfg.floors) for d in (UP, DOWN)
@@ -70,13 +71,34 @@ class Simulation:
     def finished(self) -> bool:
         return not self._pending and self.delivered == len(self.passengers)
 
+    def _resolve_horizon(self) -> float:
+        """Stop time in seconds: an explicit max_time, else 4 hours (office_day: last request + margin).
+
+        Resolved here, from the passengers actually given, because every path (CLI, compare, viewer,
+        tests) goes through Simulation; the config is never changed, so a copy made for another seed
+        resolves its own horizon.
+        """
+        cfg = self.cfg
+        if cfg.traffic != "office_day":
+            return DEFAULT_MAX_TIME if cfg.max_time is None else cfg.max_time
+        last = max((p.arrival for p in self.passengers), default=0.0)
+        needed = last + float(cfg.office_settings()["drain_margin_s"])
+        if cfg.max_time is None:
+            return needed
+        if cfg.max_time < needed:
+            raise ValueError(
+                f"max_time {cfg.max_time:g} s is shorter than the {needed:g} s this office_day needs "
+                f"(last request at {last:g} s plus a {needed - last:g} s margin)"
+            )
+        return cfg.max_time
+
     # --------------------------------------------------------------------- run
     def run(self, record: bool = False, frame_interval: float = 0.5) -> "Simulation":
         if record:
             self.frames = []
             self._frame_every = max(1, round(frame_interval / self.cfg.dt))
             self._record_frame()
-        while not self.finished() and self.t < self.cfg.max_time - EPS:
+        while not self.finished() and self.t < self.horizon - EPS:
             self.step()
         if record and (self._tick % self._frame_every):
             self._record_frame()

@@ -79,6 +79,8 @@ def summarize(sim) -> dict:
         "bottlenecks": sum(sim.bottleneck_episodes),
         "bottleneck_time": sum(sim.bottleneck_time),
         "left_behind": sim.left_behind_events,
+        "passengers_total": len(ps),
+        "horizon": sim.horizon,
     }
     out = {k: round(v, 3) if isinstance(v, float) else v for k, v in out.items()}
     out["per_floor"] = [
