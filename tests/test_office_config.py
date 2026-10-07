@@ -52,6 +52,8 @@ class OfficeConfigTests(unittest.TestCase):
             {"traffic": "office_day", "office": {"break_min": [5, 20]}},  # shorter than min_trip_gap_s
             {"traffic": "office_day", "office": {"min_trip_gap_s": 0}},
             {"traffic": "office_day", "office": {"arrival_peak": "09:00"}},  # outside arrival_window
+            {"traffic": "office_day", "office": {"late_end": "11:40"}},  # a late arrival can collide with lunch
+            {"traffic": "office_day", "office": {"home_window": ["13:30", "17:45"]}},  # lunch can run into going home
         ]
         for data in bad:
             with self.subTest(data=data), self.assertRaises(ValueError):

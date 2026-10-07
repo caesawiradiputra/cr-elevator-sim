@@ -32,7 +32,7 @@ when `dev` is promoted. Each entry links to its design spec when there is one.
   cafeteria breaks, an evening exodus with some staying late, and per-seed day variation.
   Settings: `employees`, `day_start`, `day_end`, `day_variation` and the `office` dict.
 - Energy metric `energy_kwh` (a comparative estimate) with a replaceable `EnergyModel`
-  (`elevsim/energy.py`), a `loaded_floor_distance` counter per car, and `energy_per_passenger`
+  (`elevsim/energy.py`), a `loaded_floor_distance` counter per car, and `energy_kwh_per_passenger`
   in the summary.
 - Summary keys `passengers_total` and `horizon`; CLI `--employees` and a kWh column in the compare table.
 - Viewer: the office scenario (live engine only), an HH:MM clock, energy rows, 120x and 600x speeds.

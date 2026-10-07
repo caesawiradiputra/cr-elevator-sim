@@ -40,7 +40,7 @@ class EnergyModelTests(unittest.TestCase):
         self.assertEqual(s["energy_kwh"], 4.0)  # 2 floors x 1.0 + 4 loaded floors x 0.5
         self.assertEqual(s["per_elevator"][0]["energy_kwh"], 4.0)
         self.assertEqual(s["per_elevator"][0]["loaded_floor_distance"], 4)
-        self.assertEqual(s["energy_per_passenger"], 2.0)
+        self.assertEqual(s["energy_kwh_per_passenger"], 2.0)
 
     def test_longer_trips_and_heavier_loads_cost_more(self):
         short = summarize(ride(dest=2, riders=1, **self.CONSTANTS))["energy_kwh"]
@@ -54,7 +54,7 @@ class EnergyModelTests(unittest.TestCase):
         sim = Simulation(SimConfig(), get_strategy("collective"), passengers=[]).run()
         s = summarize(sim)
         self.assertEqual(s["energy_kwh"], 0.0)
-        self.assertEqual(s["energy_per_passenger"], 0.0)
+        self.assertEqual(s["energy_kwh_per_passenger"], 0.0)
 
     def test_model_names_match_the_config(self):
         self.assertEqual(set(MODELS), set(ENERGY_MODELS))

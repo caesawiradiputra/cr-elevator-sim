@@ -183,6 +183,8 @@ class SimConfig:
             (w0 < w1, "office.work_window must be in order"),
             (w0 <= lunch - spread and lunch + spread + longest_lunch <= w1,
              "lunch (centre +/- spread, plus the longest lunch) must fit inside office.work_window"),
+            (late_end + gap <= lunch - spread and lunch + spread + longest_lunch + gap <= h0,
+             "lunch (centre +/- spread, plus the longest lunch) must stay min_trip_gap_s clear of late_end and home_window"),
             (w1 + longest_optional <= end, "day_end must leave room for the longest meeting or break after work_window"),
         ]
         for ok, message in checks:

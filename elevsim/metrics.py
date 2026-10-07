@@ -79,7 +79,7 @@ def summarize(sim) -> dict:
         "idle_time": idle,
         "floors_travelled": sum(e.floors_travelled for e in sim.elevators),
         "energy_kwh": energy,
-        "energy_per_passenger": energy / len(done) if done else 0.0,
+        "energy_kwh_per_passenger": energy / len(done) if done else 0.0,
         "stops": sum(e.stops for e in sim.elevators),
         "avg_queue": sum(sim.queue_area) / (T * cfg.floors),
         "max_queue": max(sim.queue_max),
