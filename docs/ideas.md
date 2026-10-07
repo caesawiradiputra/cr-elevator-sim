@@ -32,6 +32,11 @@ tests and the CI smoke commands before and after.
 
 ## Traffic and scenarios
 
+- [ ] More than one entry and exit floor: trips that start or end at a basement (underground
+  car park) as well as the lobby. Note: the engine already handles floors below the lobby
+  (floor 0 is just the lowest floor and `lobby_floor` can be 1 or more), so the missing part is
+  traffic with several entry floors, in `office_day` and in the plain traffic mixes. Check
+  `strategies/scan.py`, which assumes floor 0 is the bottom. (2026-10-08)
 - [ ] Night and early-morning users (security checks, cleaners) as another group
   of actors with their own trips. (2026-10-08)
 - [ ] 24-hour window, 00:00-23:59, using the `day_start` / `day_end` config. (2026-10-08)
