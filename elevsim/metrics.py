@@ -4,6 +4,8 @@ from __future__ import annotations
 import math
 import statistics
 
+from .energy import get_energy_model
+
 
 def _pct(values: list[float], q: float) -> float:
     if not values:
@@ -35,6 +37,7 @@ METRICS = {
     "avg_occupancy": ("Average car occupancy", "%", None),
     "idle_time": ("Elevator idle time (total)", "s", None),
     "floors_travelled": ("Floors travelled (total)", "", True),
+    "energy_kwh": ("Energy use (estimate)", "kWh", True),
     "stops": ("Stops (total)", "", True),
     "avg_queue": ("Average queue per floor", "", True),
     "max_queue": ("Longest queue", "", True),
@@ -58,6 +61,8 @@ def summarize(sim) -> dict:
     E = len(sim.elevators)
 
     idle = sum(e.time_in_state["idle"] for e in sim.elevators)
+    energy_model = get_energy_model(cfg)
+    energy = sum(energy_model.car_energy_kwh(e) for e in sim.elevators)
     out = {
         "avg_wait": _mean(waits),
         "p95_wait": _pct(waits, 0.95),
@@ -73,6 +78,8 @@ def summarize(sim) -> dict:
         "avg_occupancy": 100.0 * sum(e.load_time for e in sim.elevators) / (T * E * cfg.capacity),
         "idle_time": idle,
         "floors_travelled": sum(e.floors_travelled for e in sim.elevators),
+        "energy_kwh": energy,
+        "energy_per_passenger": energy / len(done) if done else 0.0,
         "stops": sum(e.stops for e in sim.elevators),
         "avg_queue": sum(sim.queue_area) / (T * cfg.floors),
         "max_queue": max(sim.queue_max),
@@ -103,6 +110,8 @@ def summarize(sim) -> dict:
             "moving_time": round(e.time_in_state["moving"], 3),
             "door_time": round(sum(e.time_in_state[s] for s in ("opening", "loading", "closing")), 3),
             "floors_travelled": e.floors_travelled,
+            "loaded_floor_distance": e.loaded_floor_distance,
+            "energy_kwh": round(energy_model.car_energy_kwh(e), 4),
             "stops": e.stops,
             "reversals": e.reversals,
             "avg_occupancy": round(100.0 * e.load_time / (T * cfg.capacity), 2),

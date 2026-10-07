@@ -137,6 +137,7 @@ class Simulation:
             if e.timer <= EPS:
                 e.floor += e.direction
                 e.floors_travelled += 1
+                e.loaded_floor_distance += e.load  # load only changes while stopped
                 self._arrive(e)
         elif e.state == OPENING:
             e.timer -= dt
