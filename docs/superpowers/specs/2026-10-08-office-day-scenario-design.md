@@ -1,6 +1,6 @@
 # Full-day office scenario and energy metric: design
 
-Status: **draft v4, three reviews incorporated (two external, one Opus self-review), awaiting user approval**
+Status: **draft v5, four reviews incorporated (three external, one Opus self-review), awaiting user approval**
 (brainstorming, architectural path).
 Date: 2026-10-08. Branch: `feat/office-day-scenario`.
 Current version: `0.1.0`. Target version: `0.2.0` (minor: new feature), a plan
@@ -33,7 +33,7 @@ Success criteria:
 | Lunch 12:00-13:00 | Some leave the building. Some only go to the cafeteria (ground floor) and return to their desk to eat. |
 | Mid-day | Movement between floors for meetings, and short cafeteria breaks. |
 | 17:00 | Most go home, some stay late. |
-| Headcount | The number of employees is set. Each stays in the building until they go home. |
+| Headcount | The number of employees is set. Each follows a continuous daily schedule, apart from the explicit lunch-out absence, and ends the day by going home through the lobby. |
 | Energy | Measure elevator movement energy as an effectiveness metric. Start simple, allow a more complex model later. |
 | Variation | Each run may deviate from the defaults. |
 
@@ -139,17 +139,29 @@ Decisions taken in the session:
     both values. This cannot be a `validate()` check, because arrivals are not
     known until generation.
 - **Temporal order.** Within one employee's trips, each trip's `Passenger.arrival`
-  is after the previous trip's `Passenger.arrival` plus a minimum gap (default
-  300 s), so the order is strictly increasing. The scheduler cannot know ride
-  times, so the gap is a proxy for "the person has arrived and spent some time
-  there". A test measures how often a next request would come before the previous
-  trip's actual `alight` time in a full run; the plan sets the accepted threshold.
+  is after the previous trip's `Passenger.arrival` plus a minimum gap, so the
+  order is strictly increasing. The default gap is 600 s, equal to the shortest
+  planned dwell (a 10-minute cafeteria break). The scheduler is strategy-independent
+  and cannot know real ride times, so the gap is a conservative proxy for "the
+  person has arrived and spent some time there".
+  - A next request can still come before the previous trip's actual `alight` time
+    when an algorithm is slow or the building is congested. That is a symptom of
+    the algorithm, not a scheduler bug, and it is measured, not forbidden.
+  - **Acceptance criterion.** On the default `office_day` scenario over 5 seeds,
+    the share of consecutive trip pairs where the next `arrival` is before the
+    previous `alight` is at most 1% for `eta` and `collective`. If a default
+    scenario exceeds that, the gap default is raised, not the algorithm changed.
+    The share is computed and reported for every strategy (a high value for
+    `scan` or `round_robin` is useful information about those algorithms).
 - **Boundary check.** `Passenger` (`elevsim/model.py`) carries `id`, `arrival`,
   `origin` and `dest`, with the direction derived. That is all the scheduler
   needs to emit, so no engine-side model change is required.
 
 **Day variation contract.** With `day_variation = 0` the configured day-level
-values are used exactly. With a value above 0 each day-level value (late share,
+values are used exactly, so the day-level values (the headline shares and the
+peak shift) are identical for every seed. Individual employee schedules still
+depend on the seed: their own times and choices are random draws from the same
+configured distributions, so different seeds still give different trips. With a value above 0 each day-level value (late share,
 going-out lunch share, stay-late share, arrival-peak shift) is drawn uniformly
 from `value ± spread x day_variation`, using the seed. Shares are clamped to
 0-1, and the lunch shares are renormalized to sum to 1. The result is
@@ -184,8 +196,13 @@ strategies:
   t_to)` (default no-op). `eta` overrides it to move `_last_replan` to where
   tick-by-tick execution would have left it.
 - **Tick counter and frames.** `_tick` advances by the number of skipped ticks. If
-  frames are being recorded, the skipped frames are emitted (the cars are idle, so
-  only the time changes).
+  frames are being recorded, a jump emits only the frames that fall on the
+  effective frame grid (`_tick % frames_every == 0`) inside the skipped range, the
+  same ones a tick-by-tick run would record (the cars are idle, so only the time
+  changes). It never emits one frame per skipped tick, so the recorded trace is
+  identical with and without fast-forward and stays within the 10,000-frame cap.
+  Simulation `dt`, fast-forward (execution speed), `frame_interval` (viewer
+  sampling) and the frame cap (browser limit) are four separate concerns.
 - **Time arithmetic.** `t` advances with `round(t + dt, 9)` and statistics add
   `dt` per tick, which a single jump of `k x dt` reproduces exactly only when `dt`
   is a power-of-two fraction (0.5, 0.25, ...). Fast-forward is therefore enabled
@@ -313,8 +330,9 @@ If profiling shows the full day runs fast enough without it, drop this section.
 ### 3.6 Testing (standard library `unittest`, CI matrix 3.10 / 3.12 / 3.13)
 
 - Same seed gives the same list, and the list is strategy-independent (existing contract).
-- Different seeds give different day profiles when `day_variation > 0`, and
-  identical shapes when it is `0`.
+- Different seeds give different day-level values when `day_variation > 0`. With
+  `day_variation = 0` the day-level values are identical across seeds, while the
+  individual employee schedules still differ between seeds.
 - Every employee's trips chain: each from-floor equals the previous destination,
   and the last trip ends in the lobby.
 - Every trip is served in a full run of each strategy on `office_day`.
@@ -335,6 +353,8 @@ If profiling shows the full day runs fast enough without it, drop this section.
   lunch, go-home) are never dropped, everyone ends in the lobby, and
   `--passengers` with `office_day` is rejected. Also run with a non-zero
   `lobby_floor`.
+- Request-versus-alight ordering stays within the 1% acceptance criterion for
+  `eta` and `collective`, and the share is reported for all strategies.
 - `max_time`: auto for `office_day` covers the latest `Passenger.arrival` plus the
   drain margin, an explicit smaller value raises `ValueError` in
   `Simulation.__init__`, `cfg.max_time` is still `None` after a run, `compare()`
