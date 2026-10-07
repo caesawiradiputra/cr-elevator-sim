@@ -1,0 +1,6 @@
+{
+  "name": "Office full day",
+  "description": "A fixed headcount through one office day: early and late arrivals, lunch (out or cafeteria), meetings and breaks, then the evening exodus. Energy use is a comparative estimate.",
+  "floors": 15, "elevators": 4, "capacity": 10,
+  "traffic": "office_day", "employees": 300
+}
