@@ -6,11 +6,11 @@
   const DATA = window.ELEVSIM || { sources: {}, presets: [], demo: null, strategies: [], metrics: {} };
   const $ = (id) => document.getElementById(id);
   const CFG_FIELDS = ["floors", "elevators", "capacity", "passengers", "arrival_rate", "seed", "traffic",
-    "idle_parking", "floor_travel_time", "door_time", "board_time", "lobby_floor"];
+    "idle_parking", "floor_travel_time", "door_time", "board_time", "lobby_floor", "employees"];
   const NUMERIC = new Set(CFG_FIELDS.filter((f) => !["traffic", "idle_parking"].includes(f)));
   const DEFAULTS = Object.assign({
     floors: 10, elevators: 3, capacity: 8, passengers: 200, arrival_rate: 20, seed: 1, traffic: "uniform",
-    idle_parking: "stay", floor_travel_time: 1.5, door_time: 2, board_time: 1, lobby_floor: 0,
+    idle_parking: "stay", floor_travel_time: 1.5, door_time: 2, board_time: 1, lobby_floor: 0, employees: 300,
   }, DATA.defaults || {});
 
   let py = null;            // Pyodide functions once loaded
@@ -55,11 +55,23 @@
   }
 
   // ----------------------------------------------------------------- config
+  // office_day is sized by employees; passengers and arrivals/min do not apply to it.
+  function syncTrafficFields() {
+    const office = $("traffic").value === "office_day";
+    $("field-employees").hidden = !office;
+    $("field-passengers").hidden = office;
+    $("field-arrival_rate").hidden = office;
+  }
   function fillForm(cfg) {
     for (const f of CFG_FIELDS) if (cfg[f] !== undefined && $(f)) $(f).value = cfg[f];
+    syncTrafficFields();
   }
   function readForm() {
-    const cfg = {};
+    // Start from the selected preset's full config so keys that have no form field (for
+    // example the office settings) reach the engine, then let the form fields win.
+    const sel = $("preset").value;
+    const preset = sel !== "" ? DATA.presets[Number(sel)] : null;
+    const cfg = preset ? Object.assign({}, preset.config) : {};
     for (const f of CFG_FIELDS) {
       const v = $(f).value;
       cfg[f] = NUMERIC.has(f) ? Number(v) : v;
@@ -70,8 +82,12 @@
     if (!(cfg.floors >= 2 && cfg.floors <= 40)) return "Floors must be between 2 and 40.";
     if (!(cfg.elevators >= 1 && cfg.elevators <= 8)) return "Elevators must be between 1 and 8.";
     if (!(cfg.capacity >= 1)) return "Car capacity must be at least 1.";
-    if (!(cfg.passengers >= 1 && cfg.passengers <= 3000)) return "Passengers must be between 1 and 3000.";
-    if (!(cfg.arrival_rate > 0)) return "Arrivals per minute must be above 0.";
+    if (cfg.traffic === "office_day") {
+      if (!(cfg.employees >= 1 && cfg.employees <= 600)) return "Employees must be between 1 and 600.";
+    } else {
+      if (!(cfg.passengers >= 1 && cfg.passengers <= 3000)) return "Passengers must be between 1 and 3000.";
+      if (!(cfg.arrival_rate > 0)) return "Arrivals per minute must be above 0.";
+    }
     if (!(cfg.lobby_floor >= 0 && cfg.lobby_floor < cfg.floors)) return "Lobby floor must be one of the building's floors (0 is the bottom).";
     return null;
   }
@@ -363,7 +379,19 @@
   }
 
   // -------------------------------------------------------------- readouts
-  const fmtT = (s) => { s = Math.max(0, Math.round(s)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+  // office_day runs show the time of day (day_start + elapsed); other runs show elapsed m:ss.
+  const dayStartSeconds = (cfg) => {
+    const [h, m] = String(cfg.day_start || "00:00").split(":").map(Number);
+    return h * 3600 + m * 60;
+  };
+  const fmtT = (s) => {
+    s = Math.max(0, Math.round(s));
+    if (result && result.config.traffic === "office_day") {
+      const abs = s + dayStartSeconds(result.config);
+      return String(Math.floor(abs / 3600) % 24).padStart(2, "0") + ":" + String(Math.floor((abs % 3600) / 60)).padStart(2, "0");
+    }
+    return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+  };
   const num = (v, d = 1) => (typeof v === "number" ? v.toFixed(d) : String(v));
 
   function renderLive() {
@@ -395,6 +423,7 @@
       ["Average journey", num(s.avg_journey) + " s"], ["Served", s.served], ["Utilization", num(s.utilization) + " %"],
       ["Idle time, all cars", num(s.idle_time, 0) + " s"], ["Floors travelled", s.floors_travelled], ["Stops", s.stops],
       ["Longest queue", s.max_queue], ["Bottleneck episodes", s.bottlenecks], ["Full-car pass-bys", s.left_behind],
+      ["Energy (est.)", s.energy_kwh === undefined ? "n/a" : num(s.energy_kwh, 2) + " kWh"],
     ];
     $("final").innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
   }
@@ -482,7 +511,7 @@
     }).join("");
 
     const cols = ["avg_wait", "p95_wait", "max_wait", "avg_travel", "avg_journey", "long_wait_pct", "utilization",
-      "idle_time", "floors_travelled", "stops", "max_queue", "bottlenecks", "left_behind"];
+      "idle_time", "floors_travelled", "energy_kwh", "stops", "max_queue", "bottlenecks", "left_behind"];
     const bestOf = {};
     for (const k of cols) {
       let b = null;
@@ -527,6 +556,7 @@
       if (!py) { runSimulation(); runCompare(); }
     };
     for (const f of CFG_FIELDS) if ($(f)) $(f).addEventListener("input", () => { if (document.activeElement === $(f)) $("preset").value = ""; });
+    $("traffic").addEventListener("change", syncTrafficFields);
     $("run-btn").onclick = runSimulation;
     $("compare-btn").onclick = runCompare;
     $("metric").onchange = renderCompare;

@@ -18,6 +18,13 @@ from .strategies import STRATEGIES
 ROOT = Path(__file__).resolve().parent.parent
 PYODIDE_CDN = "https://cdn.jsdelivr.net/npm/pyodide@0.26.4/"
 DEMO_PRESET = "office_lunch"
+NO_PRECOMPUTE = {"office_day"}  # a full day is too large to embed; it runs on the live engine
+
+
+def precompute_ids(presets: list[dict], demo_all: bool) -> list[str]:
+    """Preset ids whose runs and comparison are computed at build time."""
+    ids = [p["id"] for p in presets] if demo_all else [DEMO_PRESET]
+    return [i for i in ids if i not in NO_PRECOMPUTE]
 
 
 def _presets() -> list[dict]:
@@ -51,7 +58,7 @@ def build_data(demo: bool = True, pyodide_base: str = PYODIDE_CDN, demo_all: boo
         "demo": None,
     }
     if demo:
-        ids = [p["id"] for p in presets] if demo_all else [DEMO_PRESET]
+        ids = precompute_ids(presets, demo_all)
         scenarios = {}
         for p in presets:
             if p["id"] not in ids:
