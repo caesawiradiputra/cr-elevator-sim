@@ -77,6 +77,11 @@ tests and the CI smoke commands before and after.
 
 ## Viewer
 
+- [ ] Game-quality smoothness: the animation is grainy and jumpy. Scale time range, speed and
+  number of people by a ratio so playback looks smooth, for example a view scale that picks
+  the display speed from the simulated span, draws one dot per N people when queues are large,
+  and animates cars between positions from their state and timers instead of snapping between
+  sparse frames. Related to the entry below; do them together. (2026-10-08)
 - [ ] Smoother animation between sparse frames. The viewer interpolates a car only
   when it moved at most 1.01 floors between frames, so 5 s frames on a full day
   snap. (2026-10-08)
