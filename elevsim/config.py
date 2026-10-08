@@ -34,16 +34,13 @@ OFFICE_DEFAULTS = {
     "drain_margin_s": 3600,  # time after the last request that the simulation may run
 }
 
-# Named traffic mixes: share of passengers that are incoming (lobby -> upper
-# floor), outgoing (upper floor -> lobby) or interfloor (upper -> upper).
-TRAFFIC_PATTERNS = {
-    "uniform": None,  # origin and destination uniformly random over all floors
-    "up_peak": {"incoming": 0.85, "outgoing": 0.05, "interfloor": 0.10},
-    "down_peak": {"incoming": 0.05, "outgoing": 0.85, "interfloor": 0.10},
-    "lunch": {"incoming": 0.15, "outgoing": 0.65, "interfloor": 0.20},  # the rush down at the start of lunch
-    "lunch_balanced": {"incoming": 0.40, "outgoing": 0.40, "interfloor": 0.20},  # the whole lunch hour, both ways
-    "interfloor": {"incoming": 0.05, "outgoing": 0.05, "interfloor": 0.90},
-}
+# Passenger traffic is "uniform" (any floor to any floor), a scheduled scenario such as
+# "office_day" (SCHEDULED_TRAFFIC), or a mix: a dict of relative weights for three kinds of trip.
+#   incoming    lobby -> upper floor
+#   outgoing    upper floor -> lobby
+#   interfloor  upper floor -> another upper floor
+# The mixes the shipped scenarios use are written in scenarios/*.json, not here.
+TRAFFIC_MIX_KEYS = ("incoming", "outgoing", "interfloor")
 
 
 def _is_number(value) -> bool:
@@ -148,7 +145,7 @@ class SimConfig:
     # Passengers
     passengers: int = 200  # total passengers generated
     arrival_rate: float = 20.0  # mean arrivals per minute (Poisson process)
-    traffic: str | dict = "uniform"  # name from TRAFFIC_PATTERNS or a custom mix dict
+    traffic: str | dict = "uniform"  # "uniform", "office_day", or a mix dict (see TRAFFIC_MIX_KEYS)
     origin_weights: list[float] | None = None  # optional per-floor weights (overrides traffic origin choice)
     destination_weights: list[float] | None = None  # optional per-floor weights for destinations
 
@@ -193,10 +190,7 @@ class SimConfig:
             raise ValueError("arrival_rate must be > 0")
         if self.dt <= 0:
             raise ValueError("dt must be > 0")
-        if isinstance(self.traffic, str) and self.traffic not in TRAFFIC_PATTERNS and self.traffic not in SCHEDULED_TRAFFIC:
-            raise ValueError(
-                f"unknown traffic pattern {self.traffic!r}; choose from {sorted([*TRAFFIC_PATTERNS, *SCHEDULED_TRAFFIC])}"
-            )
+        self._validate_traffic()
         for name in ("origin_weights", "destination_weights"):
             w = getattr(self, name)
             if w is not None and len(w) != self.floors:
@@ -217,6 +211,24 @@ class SimConfig:
         if self.traffic == "office_day":
             self._validate_office_day()
         return self
+
+    def _validate_traffic(self) -> None:
+        t = self.traffic
+        if isinstance(t, str):
+            if t != "uniform" and t not in SCHEDULED_TRAFFIC:
+                raise ValueError(
+                    f"unknown traffic {t!r}; choose from {sorted(['uniform', *SCHEDULED_TRAFFIC])} "
+                    f"or give a mix of {list(TRAFFIC_MIX_KEYS)} weights"
+                )
+            return
+        if not isinstance(t, dict):
+            raise ValueError("traffic must be a name or a mix dict")
+        if not t or set(t) - set(TRAFFIC_MIX_KEYS):
+            raise ValueError(f"traffic mix keys must be among {list(TRAFFIC_MIX_KEYS)}, got {sorted(t)}")
+        if not all(_is_number(w) and w >= 0 for w in t.values()):
+            raise ValueError("traffic mix weights must be numbers >= 0")
+        if sum(t.values()) <= 0:
+            raise ValueError("traffic mix weights must not all be zero")
 
     def office_settings(self) -> dict:
         """OFFICE_DEFAULTS with the `office` overrides applied."""

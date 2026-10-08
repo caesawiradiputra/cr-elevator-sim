@@ -9,13 +9,13 @@
       "id": "rush_down",
       "name": "Rush down",
       "description": "The rush down at the start of lunch: about one person every 2.4 seconds, and most of them (65%) leave an upper floor for the lobby, while 15% still come up from the lobby and 20% move between upper floors. Cars fill on the way down and the upper floors queue, much like an evening rush but with some traffic in the other direction.",
-      "traffic": "lunch"
+      "traffic": {"incoming": 0.15, "outgoing": 0.65, "interfloor": 0.20}
     },
     {
       "id": "balanced",
       "name": "Balanced, both ways",
       "description": "The whole lunch hour averaged out: about one person every 2.4 seconds, 40% from the lobby up, 40% from upper floors down and 20% between upper floors, so cars are busy in both directions at once. This favors algorithms that handle both directions well.",
-      "traffic": "lunch_balanced"
+      "traffic": {"incoming": 0.40, "outgoing": 0.40, "interfloor": 0.20}
     }
   ]
 }

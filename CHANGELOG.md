@@ -44,8 +44,11 @@ when `dev` is promoted. Each entry links to its design spec when there is one.
 
 ### Changed
 
-- The `lunch` traffic pattern is now the rush down at the start of lunch (15% up from the lobby, 65% down,
-  20% between floors). The old 40/40/20 mix is kept as `lunch_balanced`.
+- The named traffic patterns (`up_peak`, `down_peak`, `lunch`, `interfloor`) are gone from the code. `traffic` is
+  `uniform`, `office_day`, or a mix written in the config (relative weights for trips up from the lobby, down to
+  it, and between floors). The shipped mixes live in the scenario files (Office lunch's default is now the rush
+  down, 15/65/20, with the old 40/40/20 as its balanced version). CLI: `--mix 0.15,0.65,0.20` replaces
+  `--traffic NAME`; the viewer shows the three shares as editable percentages.
 - `max_time` now defaults to `None` (auto): 4 hours for existing traffic, exactly as before, and the
   last request plus a drain margin for `office_day`. An explicit value is never overridden; one too
   small for `office_day` raises an error.

@@ -7,7 +7,7 @@ from pathlib import Path
 
 from elevsim import SimConfig
 from elevsim.cli import main
-from elevsim.config import TRAFFIC_PATTERNS, resolve_scenario, scenario_variations
+from elevsim.config import resolve_scenario, scenario_variations
 from elevsim.passengers import generate_passengers
 from elevsim.viewer_build import _presets, build_viewer
 
@@ -20,28 +20,24 @@ def scenario(**extra):
         "name": "Test", "floors": 6, "elevators": 2, "passengers": 20, "traffic": "uniform",
         "variations": [
             {"id": "a", "name": "A", "description": "first", "arrival_rate": 5},
-            {"id": "b", "name": "B", "description": "second", "traffic": "lunch"},
+            {"id": "b", "name": "B", "description": "second", "traffic": {"incoming": 1, "outgoing": 1, "interfloor": 0}},
             {"id": "c", "name": "C", "description": "third", "capacity": 3},
         ],
     }
     return {**base, **extra}
 
 
-class LunchPatternTests(unittest.TestCase):
-    def test_every_pattern_shares_sum_to_one(self):
-        for name, mix in TRAFFIC_PATTERNS.items():
-            if mix is None:
-                continue
-            with self.subTest(pattern=name):
-                self.assertAlmostEqual(sum(mix.values()), 1.0)
-
-    def test_lunch_is_mostly_down_and_lunch_balanced_keeps_the_old_mix(self):
-        lunch = TRAFFIC_PATTERNS["lunch"]
-        self.assertGreater(lunch["outgoing"], 2 * lunch["incoming"])
-        self.assertEqual(TRAFFIC_PATTERNS["lunch_balanced"], {"incoming": 0.40, "outgoing": 0.40, "interfloor": 0.20})
+class LunchMixTests(unittest.TestCase):
+    def test_default_lunch_is_mostly_down_and_the_balanced_version_keeps_the_old_mix(self):
+        rush = SimConfig.from_file(LUNCH).traffic
+        self.assertGreater(rush["outgoing"], 2 * rush["incoming"])
+        self.assertEqual(SimConfig.from_file(LUNCH, variation="balanced").traffic,
+                         {"incoming": 0.40, "outgoing": 0.40, "interfloor": 0.20})
 
     def test_lunch_passengers_mostly_end_at_the_lobby(self):
-        people = generate_passengers(SimConfig(traffic="lunch", passengers=2000))
+        cfg = SimConfig.from_file(LUNCH)
+        cfg.passengers = 2000
+        people = generate_passengers(cfg)
         share = sum(p.dest == 0 for p in people) / len(people)
         self.assertGreater(share, 0.55)  # configured 0.65
 
@@ -58,14 +54,14 @@ class ResolveScenarioTests(unittest.TestCase):
         data = scenario()
         self.assertEqual(resolve_scenario(data, "a")["arrival_rate"], 5)
         self.assertEqual(resolve_scenario(data, "a")["traffic"], "uniform")  # inherited from the root
-        self.assertEqual(resolve_scenario(data, "b")["traffic"], "lunch")
+        self.assertEqual(resolve_scenario(data, "b")["traffic"], {"incoming": 1, "outgoing": 1, "interfloor": 0})
         self.assertNotIn("arrival_rate", resolve_scenario(data, "b"))
         for key in ("name", "description", "variations", "enabled_variations", "default_variation", "id"):
             self.assertNotIn(key, resolve_scenario(data, "a"))
 
     def test_the_default_is_default_variation_else_the_first_enabled(self):
-        self.assertEqual(resolve_scenario(scenario(default_variation="b", enabled_variations=["a", "b"]))["traffic"], "lunch")
-        self.assertEqual(resolve_scenario(scenario(enabled_variations=["b", "a"]))["traffic"], "lunch")  # first enabled
+        self.assertEqual(resolve_scenario(scenario(default_variation="b", enabled_variations=["a", "b"]))["traffic"], {"incoming": 1, "outgoing": 1, "interfloor": 0})
+        self.assertEqual(resolve_scenario(scenario(enabled_variations=["b", "a"]))["traffic"], {"incoming": 1, "outgoing": 1, "interfloor": 0})  # first enabled
         self.assertEqual(resolve_scenario(scenario())["arrival_rate"], 5)  # first listed when nothing is enabled explicitly
 
     def test_enabled_variations_limit_what_the_viewer_lists_but_not_what_can_be_asked_for(self):
@@ -106,8 +102,8 @@ class ScenarioFileTests(unittest.TestCase):
         data = json.loads(Path(LUNCH).read_text())
         self.assertEqual([v["id"] for v in data["variations"]], ["rush_down", "balanced"])
         self.assertEqual(data["default_variation"], "rush_down")
-        self.assertEqual(SimConfig.from_file(LUNCH).traffic, "lunch")
-        self.assertEqual(SimConfig.from_file(LUNCH, variation="balanced").traffic, "lunch_balanced")
+        self.assertEqual(SimConfig.from_file(LUNCH).traffic["outgoing"], 0.65)
+        self.assertEqual(SimConfig.from_file(LUNCH, variation="balanced").traffic["outgoing"], 0.40)
         self.assertEqual(SimConfig.from_file(LUNCH, variation="balanced").arrival_rate, 25)  # inherited
 
 
@@ -117,8 +113,8 @@ class ViewerPresetTests(unittest.TestCase):
         lunch = presets["office_lunch"]
         self.assertEqual([v["id"] for v in lunch["variations"]], ["rush_down", "balanced"])
         self.assertEqual(lunch["default_variation"], "rush_down")
-        self.assertEqual(lunch["config"]["traffic"], "lunch")  # the default version
-        self.assertEqual(lunch["variations"][1]["config"]["traffic"], "lunch_balanced")
+        self.assertEqual(lunch["config"]["traffic"]["outgoing"], 0.65)  # the default version
+        self.assertEqual(lunch["variations"][1]["config"]["traffic"]["outgoing"], 0.40)
         self.assertEqual(lunch["variations"][1]["config"]["floors"], lunch["config"]["floors"])
         self.assertEqual(lunch["variations"][0]["name"], "Rush down")
         for preset in presets.values():
@@ -138,7 +134,8 @@ class ViewerPresetTests(unittest.TestCase):
             build_viewer(str(out), demo=False)
             page = out.read_text()
         self.assertIn('id="variation"', page)
-        self.assertIn('value="lunch_balanced"', page)
+        self.assertIn('id="mix_incoming"', page)
+        self.assertIn('value="mix"', page)
 
 
 class CliVariationTests(unittest.TestCase):
@@ -149,9 +146,9 @@ class CliVariationTests(unittest.TestCase):
         return out.getvalue()
 
     def test_variation_flag_picks_a_version(self):
-        self.assertIn("(lunch, 25", self._run("run", "-s", "collective", "--config", LUNCH, "--passengers", "40"))
+        self.assertIn("mix 15/65/20", self._run("run", "-s", "collective", "--config", LUNCH, "--passengers", "40"))
         text = self._run("run", "-s", "collective", "--config", LUNCH, "--variation", "balanced", "--passengers", "40")
-        self.assertIn("(lunch_balanced, 25", text)
+        self.assertIn("mix 40/40/20", text)
 
     def test_variation_errors_are_clear(self):
         for argv in (

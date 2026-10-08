@@ -9,7 +9,7 @@ name. The standard library is the only dependency.
 ```text
 config (JSON scenario / CLI flags / viewer form)
   -> SimConfig                elevsim/config.py       validates and holds every setting
-  -> generate_passengers      elevsim/passengers.py   seeded traffic mixes (uniform, up_peak, ...)
+  -> generate_passengers      elevsim/passengers.py   seeded traffic (uniform, or a mix of trip kinds)
      or office_day_passengers elevsim/schedule.py     employees -> timed trips (office_day)
   -> Simulation.run           elevsim/engine.py       the tick loop, with a Strategy deciding the cars
   -> summarize                elevsim/metrics.py      wait/journey/queue metrics, plus energy via
@@ -25,7 +25,7 @@ config (JSON scenario / CLI flags / viewer form)
 | `elevsim/config.py` | `SimConfig` dataclass, validation, `OFFICE_DEFAULTS`, `parse_hhmm` | add or rename a setting, change a default, add a validation rule |
 | `elevsim/model.py` | `Passenger`, `HallCall`, `Elevator` and the state names | add a per-car or per-passenger counter |
 | `elevsim/engine.py` | `Simulation`: arrivals, car state machine, statistics, frame recording | how cars move, board and open doors; the stop time (`_resolve_horizon`); frame sampling (`_frames_every`) |
-| `elevsim/passengers.py` | `generate_passengers`: seeded Poisson arrivals and traffic mixes | add a traffic mix |
+| `elevsim/passengers.py` | `generate_passengers`: seeded Poisson arrivals and traffic mixes | change how a trip is drawn (the mix numbers themselves are in the scenario files) |
 | `elevsim/schedule.py` | office-day scheduler: `Employee`, `Trip`, `OfficeDay`, `build_day`, `generate_office_day` | change the day shape, lunch rules, meeting and break rules |
 | `elevsim/energy.py` | `EnergyModel`, `SimpleEnergy`, `MODELS` | add an energy model (also add its name to `ENERGY_MODELS` in `config.py`) |
 | `elevsim/metrics.py` | `METRICS` table and `summarize` | add a metric (add it to `METRICS`; the CLI table and the viewer lists are separate, see below) |

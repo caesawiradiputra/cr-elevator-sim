@@ -177,3 +177,5 @@ td .sd { color: var(--muted); font-size: 12px; }
 
 .field[hidden] { display: none; }
 .scenario-note { grid-column: 1 / -1; margin: 0; }
+.mix { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.mix[hidden] { display: none; }

@@ -17,7 +17,7 @@ identical, reproducible conditions.
 ```bash
 python3 -m elevsim list                                   # available algorithms
 python3 -m elevsim compare --config scenarios/office_lunch.json --seeds 10 --out results
-python3 -m elevsim run -s eta --floors 12 --elevators 3 --traffic up_peak --trace trace.json
+python3 -m elevsim run -s eta --floors 12 --elevators 3 --mix 0.85,0.05,0.10 --trace trace.json
 python3 -m elevsim run -s eta --config scenarios/office_day.json --employees 100   # one full office day
 python3 -m elevsim viewer                                 # writes dist/viewer.html
 python3 -m unittest discover -s tests -t .                # tests
@@ -45,7 +45,7 @@ CLI runs; pick another with `--variation ID`. A file without `variations` is one
 | `board_time` | 1.0 s | time per passenger getting in or out |
 | `passengers` | 200 | total passengers generated |
 | `arrival_rate` | 20 / min | mean Poisson arrival rate |
-| `traffic` | `uniform` | `uniform`, `up_peak`, `down_peak`, `lunch` (the rush down at the start of lunch), `lunch_balanced` (both ways), `interfloor`, `office_day`, or a mix dict `{"incoming": .5, "outgoing": .3, "interfloor": .2}` |
+| `traffic` | `uniform` | `uniform`, `office_day`, or a mix (relative weights for trips up from the lobby, down to it, and between floors; CLI: `--mix up,down,between`) written as a dict `{"incoming": .5, "outgoing": .3, "interfloor": .2}` |
 | `origin_weights`, `destination_weights` | none | per-floor weights that override the traffic pattern |
 | `idle_parking` | `stay` | `stay` or `lobby` (idle cars return to the lobby after `park_delay`) |
 | `seed` | 1 | passenger generation seed |

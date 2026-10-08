@@ -7,6 +7,8 @@
   const $ = (id) => document.getElementById(id);
   const CFG_FIELDS = ["floors", "elevators", "capacity", "passengers", "arrival_rate", "seed", "traffic",
     "idle_parking", "floor_travel_time", "door_time", "board_time", "lobby_floor", "employees"];
+  // A traffic mix is three relative weights, shown and edited as percentages.
+  const MIX_FIELDS = { incoming: "mix_incoming", outgoing: "mix_outgoing", interfloor: "mix_interfloor" };
   const NUMERIC = new Set(CFG_FIELDS.filter((f) => !["traffic", "idle_parking"].includes(f)));
   const DEFAULTS = Object.assign({
     floors: 10, elevators: 3, capacity: 8, passengers: 200, arrival_rate: 20, seed: 1, traffic: "uniform",
@@ -59,11 +61,19 @@
   function syncTrafficFields() {
     const office = $("traffic").value === "office_day";
     $("field-employees").hidden = !office;
+    $("field-mix").hidden = $("traffic").value !== "mix";
     $("field-passengers").hidden = office;
     $("field-arrival_rate").hidden = office;
   }
+  // `traffic` is a name, or a mix object, which the form shows as the "mix" option plus its shares.
   function fillForm(cfg) {
-    for (const f of CFG_FIELDS) if (cfg[f] !== undefined && $(f)) $(f).value = cfg[f];
+    const isMix = typeof cfg.traffic === "object" && cfg.traffic !== null;
+    const shown = isMix ? Object.assign({}, cfg, { traffic: "mix" }) : cfg;
+    for (const f of CFG_FIELDS) if (shown[f] !== undefined && $(f)) $(f).value = shown[f];
+    if (isMix) {
+      const total = Object.values(cfg.traffic).reduce((a, b) => a + b, 0) || 1;
+      for (const [key, id] of Object.entries(MIX_FIELDS)) $(id).value = Math.round((1000 * (cfg.traffic[key] || 0)) / total) / 10;
+    }
     syncTrafficFields();
   }
   function readForm() {
@@ -76,12 +86,20 @@
       const v = $(f).value;
       cfg[f] = NUMERIC.has(f) ? Number(v) : v;
     }
+    if (cfg.traffic === "mix") {
+      cfg.traffic = {};
+      for (const [key, id] of Object.entries(MIX_FIELDS)) cfg.traffic[key] = Number($(id).value) / 100;
+    }
     return cfg;
   }
   function validate(cfg) {
     if (!(cfg.floors >= 2 && cfg.floors <= 40)) return "Floors must be between 2 and 40.";
     if (!(cfg.elevators >= 1 && cfg.elevators <= 8)) return "Elevators must be between 1 and 8.";
     if (!(cfg.capacity >= 1)) return "Car capacity must be at least 1.";
+    if (typeof cfg.traffic === "object") {
+      const shares = Object.values(cfg.traffic);
+      if (!shares.every((x) => x >= 0) || !(shares.reduce((a, b) => a + b, 0) > 0)) return "Trip shares must be 0 or more and not all zero.";
+    }
     if (cfg.traffic === "office_day") {
       if (!(Number.isInteger(cfg.employees) && cfg.employees >= 1 && cfg.employees <= 600)) return "Employees must be a whole number between 1 and 600.";
     } else {
@@ -563,7 +581,7 @@
     const byMax = res.slice().sort((a, b) => a.metrics.max_wait.mean - b.metrics.max_wait.mean);
     const c = compareData.config;
     const gap = byJourney[byJourney.length - 1].metrics.avg_journey.mean - byJourney[0].metrics.avg_journey.mean;
-    $("verdict").innerHTML = `For ${c.floors} floors, ${c.elevators} car${c.elevators > 1 ? "s" : ""} and ${c.traffic.replace("_", "-")} traffic ${c.traffic === "office_day" ? `with ${c.employees} employees` : `at ${c.arrival_rate}/min`}, ` +
+    $("verdict").innerHTML = `For ${c.floors} floors, ${c.elevators} car${c.elevators > 1 ? "s" : ""} and ${typeof c.traffic === "object" ? "lobby-mix" : c.traffic.replace("_", "-")} traffic ${c.traffic === "office_day" ? `with ${c.employees} employees` : `at ${c.arrival_rate}/min`}, ` +
       `<strong>${byJourney[0].label}</strong> gives the shortest average journey (${num(byJourney[0].metrics.avg_journey.mean)} s, ` +
       `${num(gap)} s faster than ${byJourney[byJourney.length - 1].label}). ` +
       (byMax[0].strategy === byJourney[0].strategy ? "It also has the lowest worst-case wait." :
@@ -593,6 +611,11 @@
       if (!py) { runSimulation(); runCompare(); }
     };
     for (const f of CFG_FIELDS) if ($(f)) $(f).addEventListener("input", () => { if (document.activeElement === $(f)) { $("preset").value = ""; populateVariations(); updateScenarioNote(); } });
+    for (const id of Object.values(MIX_FIELDS)) {
+      $(id).addEventListener("input", () => {
+        if (document.activeElement === $(id)) { $("preset").value = ""; populateVariations(); updateScenarioNote(); }
+      });
+    }
     $("variation").onchange = () => {
       const p = currentPreset();
       const v = currentVariation();

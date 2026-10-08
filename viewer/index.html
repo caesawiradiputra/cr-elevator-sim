@@ -33,13 +33,14 @@
         <div class="field wide"><label for="traffic">Traffic pattern</label>
           <select id="traffic">
             <option value="uniform">Uniform (any floor to any floor)</option>
-            <option value="up_peak">Morning up-peak (from lobby)</option>
-            <option value="down_peak">Evening down-peak (to lobby)</option>
-            <option value="lunch">Lunch rush (mostly down)</option>
-            <option value="lunch_balanced">Lunch, balanced (both ways)</option>
-            <option value="interfloor">Interfloor (between upper floors)</option>
+            <option value="mix">Mix of lobby trips (set the shares)</option>
             <option value="office_day">Office full day (employees)</option>
           </select></div>
+        <div class="mix" id="field-mix" hidden>
+          <div class="field"><label for="mix_incoming">Up from lobby %</label><input id="mix_incoming" type="number" min="0" step="1"></div>
+          <div class="field"><label for="mix_outgoing">Down to lobby %</label><input id="mix_outgoing" type="number" min="0" step="1"></div>
+          <div class="field"><label for="mix_interfloor">Between floors %</label><input id="mix_interfloor" type="number" min="0" step="1"></div>
+        </div>
         <div class="field wide"><label for="idle_parking">Idle cars</label>
           <select id="idle_parking"><option value="stay">Wait where they stop</option><option value="lobby">Return to the lobby</option></select></div>
       </div>
