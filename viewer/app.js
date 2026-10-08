@@ -83,7 +83,7 @@
     if (!(cfg.elevators >= 1 && cfg.elevators <= 8)) return "Elevators must be between 1 and 8.";
     if (!(cfg.capacity >= 1)) return "Car capacity must be at least 1.";
     if (cfg.traffic === "office_day") {
-      if (!(cfg.employees >= 1 && cfg.employees <= 600)) return "Employees must be between 1 and 600.";
+      if (!(Number.isInteger(cfg.employees) && cfg.employees >= 1 && cfg.employees <= 600)) return "Employees must be a whole number between 1 and 600.";
     } else {
       if (!(cfg.passengers >= 1 && cfg.passengers <= 3000)) return "Passengers must be between 1 and 3000.";
       if (!(cfg.arrival_rate > 0)) return "Arrivals per minute must be above 0.";
@@ -528,7 +528,7 @@
     const byMax = res.slice().sort((a, b) => a.metrics.max_wait.mean - b.metrics.max_wait.mean);
     const c = compareData.config;
     const gap = byJourney[byJourney.length - 1].metrics.avg_journey.mean - byJourney[0].metrics.avg_journey.mean;
-    $("verdict").innerHTML = `For ${c.floors} floors, ${c.elevators} car${c.elevators > 1 ? "s" : ""} and ${c.traffic.replace("_", "-")} traffic at ${c.arrival_rate}/min, ` +
+    $("verdict").innerHTML = `For ${c.floors} floors, ${c.elevators} car${c.elevators > 1 ? "s" : ""} and ${c.traffic.replace("_", "-")} traffic ${c.traffic === "office_day" ? `with ${c.employees} employees` : `at ${c.arrival_rate}/min`}, ` +
       `<strong>${byJourney[0].label}</strong> gives the shortest average journey (${num(byJourney[0].metrics.avg_journey.mean)} s, ` +
       `${num(gap)} s faster than ${byJourney[byJourney.length - 1].label}). ` +
       (byMax[0].strategy === byJourney[0].strategy ? "It also has the lowest worst-case wait." :

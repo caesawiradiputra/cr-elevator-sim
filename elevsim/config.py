@@ -45,6 +45,10 @@ TRAFFIC_PATTERNS = {
 }
 
 
+def _is_number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
 def parse_hhmm(text: str) -> int:
     """Seconds since midnight for an "HH:MM" string; ValueError for anything else."""
     try:
@@ -134,6 +138,8 @@ class SimConfig:
             raise ValueError(f"unknown energy_model {self.energy_model!r}; choose from {list(ENERGY_MODELS)}")
         if self.energy_base < 0 or self.energy_per_passenger < 0:
             raise ValueError("energy_base and energy_per_passenger must be >= 0")
+        if not isinstance(self.office, dict):
+            raise ValueError("office must be a dict of overrides")
         unknown = set(self.office) - set(OFFICE_DEFAULTS)
         if unknown:
             raise ValueError(f"unknown office keys: {sorted(unknown)}")
@@ -145,12 +151,35 @@ class SimConfig:
         """OFFICE_DEFAULTS with the `office` overrides applied."""
         return {**OFFICE_DEFAULTS, **self.office}
 
+    @staticmethod
+    def _validate_office_types(o: dict) -> None:
+        """Wrong types must be a ValueError here, not a TypeError halfway through generation."""
+        for name in ("late_share", "lunch_spread_min", "lunch_out_share", "lunch_cafe_share", "meetings_per_person",
+                     "breaks_per_person", "stay_late_share", "min_trip_gap_s", "drain_margin_s"):
+            if not _is_number(o[name]):
+                raise ValueError(f"office.{name} must be a number")
+        for name in ("lunch_out_min", "lunch_cafe_min", "meeting_min", "break_min"):
+            value = o[name]
+            if not (isinstance(value, (list, tuple)) and len(value) == 2 and all(_is_number(x) for x in value)):
+                raise ValueError(f"office.{name} must be [low, high] minutes (two numbers)")
+        for name in ("arrival_window", "work_window", "home_window"):
+            value = o[name]
+            if not (isinstance(value, (list, tuple)) and len(value) == 2):
+                raise ValueError(f'office.{name} must be ["HH:MM", "HH:MM"]')
+
     def _validate_office_day(self) -> None:
+        if isinstance(self.employees, bool) or not isinstance(self.employees, int):
+            raise ValueError("employees must be a whole number")
         if self.employees < 1:
             raise ValueError("employees must be >= 1")
-        if self.day_variation < 0:
-            raise ValueError("day_variation must be >= 0")
+        if not _is_number(self.day_variation) or self.day_variation < 0:
+            raise ValueError("day_variation must be a number >= 0")
+        if self.origin_weights is not None:
+            desk_weights = [w for f, w in enumerate(self.origin_weights) if f != self.lobby_floor]
+            if any(w < 0 for w in desk_weights) or not any(w > 0 for w in desk_weights):
+                raise ValueError("origin_weights must be >= 0 and leave at least one desk floor besides the lobby")
         o = self.office_settings()
+        self._validate_office_types(o)
         for name in ("late_share", "lunch_out_share", "lunch_cafe_share", "stay_late_share"):
             if not 0.0 <= o[name] <= 1.0:
                 raise ValueError(f"office.{name} must be between 0 and 1")

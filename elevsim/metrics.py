@@ -90,6 +90,7 @@ def summarize(sim) -> dict:
         "horizon": sim.horizon,
     }
     out = {k: round(v, 3) if isinstance(v, float) else v for k, v in out.items()}
+    out["energy_kwh_per_passenger"] = round(energy / len(done), 5) if done else 0.0  # small values need more digits
     out["per_floor"] = [
         {
             "floor": f,

@@ -42,6 +42,11 @@ class EnergyModelTests(unittest.TestCase):
         self.assertEqual(s["per_elevator"][0]["loaded_floor_distance"], 4)
         self.assertEqual(s["energy_kwh_per_passenger"], 2.0)
 
+    def test_per_passenger_energy_keeps_enough_digits(self):
+        # 2 floors x 0.0031 + 4 loaded floors x 0.001 = 0.0102 kWh for 2 riders: 0.0051 each
+        s = summarize(ride(dest=2, riders=2, energy_base=0.0031, energy_per_passenger=0.001))
+        self.assertEqual(s["energy_kwh_per_passenger"], 0.0051)
+
     def test_longer_trips_and_heavier_loads_cost_more(self):
         short = summarize(ride(dest=2, riders=1, **self.CONSTANTS))["energy_kwh"]
         long_ = summarize(ride(dest=4, riders=1, **self.CONSTANTS))["energy_kwh"]

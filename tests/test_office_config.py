@@ -54,6 +54,19 @@ class OfficeConfigTests(unittest.TestCase):
             {"traffic": "office_day", "office": {"arrival_peak": "09:00"}},  # outside arrival_window
             {"traffic": "office_day", "office": {"late_end": "11:40"}},  # a late arrival can collide with lunch
             {"traffic": "office_day", "office": {"home_window": ["13:30", "17:45"]}},  # lunch can run into going home
+            # malformed values must be ValueError at validate(), never a TypeError at run time
+            {"traffic": "office_day", "employees": 2.5},
+            {"traffic": "office_day", "employees": True},
+            {"traffic": "office_day", "day_variation": "1"},
+            {"traffic": "office_day", "office": []},
+            {"traffic": "office_day", "office": {"lunch_out_min": [10, "20"]}},
+            {"traffic": "office_day", "office": {"lunch_out_min": [10]}},
+            {"traffic": "office_day", "office": {"late_share": "0.1"}},
+            {"traffic": "office_day", "office": {"arrival_window": "07:00"}},
+            {"traffic": "office_day", "office": {"home_window": [7, 8]}},
+            # origin_weights that leave no desk floor besides the lobby
+            {"traffic": "office_day", "floors": 3, "origin_weights": [1, 0, 0]},
+            {"traffic": "office_day", "floors": 3, "origin_weights": [1, -1, 1]},
         ]
         for data in bad:
             with self.subTest(data=data), self.assertRaises(ValueError):
