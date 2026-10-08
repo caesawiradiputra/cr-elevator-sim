@@ -4,4 +4,4 @@ from .config import SimConfig
 from .engine import Simulation
 
 __all__ = ["SimConfig", "Simulation", "run", "compare", "list_strategies"]
-__version__ = "0.2.0"
+__version__ = "0.2.1"

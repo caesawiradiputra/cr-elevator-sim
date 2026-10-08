@@ -22,6 +22,17 @@ when `dev` is promoted. Each entry links to its design spec when there is one.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-08
+
+### Added
+
+- `docs/tech-stack.md`: the versions in use, the upgrade strategy, and where the simulator could
+  be used and run later.
+
+### Changed
+
+- CI pins Node 22 for the viewer syntax check; `.mcp.json` pins `@playwright/mcp@0.0.82` instead of `@latest`.
+
 ## [0.2.0] - 2026-10-07
 
 ### Added
