@@ -10,6 +10,7 @@ class ViewerBuildTests(unittest.TestCase):
     def test_office_day_is_a_preset(self):
         presets = {p["id"]: p for p in _presets()}
         self.assertEqual(presets["office_day"]["config"]["traffic"], "office_day")
+        self.assertIn("late_share", presets["office_day"]["config"]["office"])  # the office numbers travel with the preset
         json.dumps(presets["office_day"])
 
     def test_every_version_explains_how_it_runs(self):

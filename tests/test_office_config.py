@@ -1,10 +1,16 @@
 import unittest
 
+from tests.office_helpers import office_data
+
 from elevsim import SimConfig, Simulation
-from elevsim.config import OFFICE_DEFAULTS, SCHEDULED_TRAFFIC, parse_hhmm
+from elevsim.config import OFFICE_KEYS, SCHEDULED_TRAFFIC, parse_hhmm
 from elevsim.metrics import summarize
 from elevsim.model import Passenger
 from elevsim.strategies import get_strategy
+
+
+def office_cfg(**overrides):
+    return SimConfig.from_dict(office_data(**overrides))
 
 
 class OfficeConfigTests(unittest.TestCase):
@@ -13,23 +19,39 @@ class OfficeConfigTests(unittest.TestCase):
         self.assertIsNone(cfg.max_time)
         self.assertEqual(cfg.employees, 300)
         self.assertEqual((cfg.day_start, cfg.day_end), ("06:45", "20:00"))
-        self.assertEqual(cfg.office_settings(), OFFICE_DEFAULTS)
+        self.assertEqual(cfg.office, {})  # the office numbers are not in the code
         self.assertEqual(cfg.energy_model, "simple")
+
+    def test_the_shipped_scenario_has_every_office_setting(self):
+        cfg = office_cfg()
+        self.assertEqual(set(cfg.office), set(OFFICE_KEYS))
+        self.assertEqual(cfg.office_settings(), cfg.office)
+
+    def test_office_day_needs_its_office_settings(self):
+        with self.assertRaises(ValueError) as cm:
+            SimConfig(traffic="office_day").validate()
+        self.assertIn("scenarios/office_day.json", str(cm.exception))
+        for key in OFFICE_KEYS:
+            data = office_data()
+            del data["office"][key]
+            with self.subTest(missing=key), self.assertRaises(ValueError) as cm:
+                SimConfig.from_dict(data)
+            self.assertIn(key, str(cm.exception))
 
     def test_office_day_is_valid_traffic(self):
         self.assertEqual(SCHEDULED_TRAFFIC, ("office_day",))
-        SimConfig(traffic="office_day").validate()
+        office_cfg()
         with self.assertRaises(ValueError) as cm:
             SimConfig(traffic="rush").validate()
         self.assertIn("office_day", str(cm.exception))
 
-    def test_office_overrides_merge_over_defaults(self):
-        cfg = SimConfig(traffic="office_day", office={"late_share": 0.3}).validate()
+    def test_office_overrides_merge_over_the_scenario_values(self):
+        cfg = office_cfg(office={"late_share": 0.3})
         self.assertEqual(cfg.office_settings()["late_share"], 0.3)
         self.assertEqual(cfg.office_settings()["late_end"], "09:30")
 
     def test_round_trip_keeps_max_time_auto(self):
-        data = SimConfig(traffic="office_day").to_dict()
+        data = office_cfg().to_dict()
         self.assertIsNone(data["max_time"])
         self.assertIsNone(SimConfig.from_dict(data).max_time)
 
@@ -40,37 +62,42 @@ class OfficeConfigTests(unittest.TestCase):
             {"energy_base": -1.0},
             {"energy_per_passenger": -0.1},
             {"max_time": 0},
-            {"traffic": "office_day", "employees": 0},
-            {"traffic": "office_day", "day_variation": -0.1},
-            {"traffic": "office_day", "day_start": "7am"},
-            {"traffic": "office_day", "day_start": "25:00"},
-            {"traffic": "office_day", "day_start": "21:00"},  # after day_end
-            {"traffic": "office_day", "day_end": "17:30"},  # before the home window ends
-            {"traffic": "office_day", "office": {"late_share": 1.5}},
-            {"traffic": "office_day", "office": {"lunch_out_share": 0.8, "lunch_cafe_share": 0.4}},
-            {"traffic": "office_day", "office": {"home_window": ["17:45", "17:00"]}},
-            {"traffic": "office_day", "office": {"break_min": [5, 20]}},  # shorter than min_trip_gap_s
-            {"traffic": "office_day", "office": {"min_trip_gap_s": 0}},
-            {"traffic": "office_day", "office": {"arrival_peak": "09:00"}},  # outside arrival_window
-            {"traffic": "office_day", "office": {"late_end": "11:40"}},  # a late arrival can collide with lunch
-            {"traffic": "office_day", "office": {"home_window": ["13:30", "17:45"]}},  # lunch can run into going home
+            {"employees": 0},
+            {"day_variation": -0.1},
+            {"day_start": "7am"},
+            {"day_start": "25:00"},
+            {"day_start": "21:00"},  # after day_end
+            {"day_end": "17:30"},  # before the home window ends
+            {"office": {"late_share": 1.5}},
+            {"office": {"lunch_out_share": 0.8, "lunch_cafe_share": 0.4}},
+            {"office": {"home_window": ["17:45", "17:00"]}},
+            {"office": {"break_min": [5, 20]}},  # shorter than min_trip_gap_s
+            {"office": {"min_trip_gap_s": 0}},
+            {"office": {"arrival_peak": "09:00"}},  # outside arrival_window
+            {"office": {"late_end": "11:40"}},  # a late arrival can collide with lunch
+            {"office": {"home_window": ["13:30", "17:45"]}},  # lunch can run into going home
+            # the day-to-day spread block
+            {"office": {"day_spread": {"late_share": 0.05}}},  # incomplete
+            {"office": {"day_spread": {"late_share": -0.1, "lunch_out_share": 0.1, "stay_late_share": 0.08, "peak_shift_s": 300}}},
+            {"office": {"day_spread": {"late_share": "x", "lunch_out_share": 0.1, "stay_late_share": 0.08, "peak_shift_s": 300}}},
+            {"office": {"day_spread": 5}},
             # malformed values must be ValueError at validate(), never a TypeError at run time
-            {"traffic": "office_day", "employees": 2.5},
-            {"traffic": "office_day", "employees": True},
-            {"traffic": "office_day", "day_variation": "1"},
-            {"traffic": "office_day", "office": []},
-            {"traffic": "office_day", "office": {"lunch_out_min": [10, "20"]}},
-            {"traffic": "office_day", "office": {"lunch_out_min": [10]}},
-            {"traffic": "office_day", "office": {"late_share": "0.1"}},
-            {"traffic": "office_day", "office": {"arrival_window": "07:00"}},
-            {"traffic": "office_day", "office": {"home_window": [7, 8]}},
+            {"employees": 2.5},
+            {"employees": True},
+            {"day_variation": "1"},
+            {"office": []},
+            {"office": {"lunch_out_min": [10, "20"]}},
+            {"office": {"lunch_out_min": [10]}},
+            {"office": {"late_share": "0.1"}},
+            {"office": {"arrival_window": "07:00"}},
+            {"office": {"home_window": [7, 8]}},
             # origin_weights that leave no desk floor besides the lobby
-            {"traffic": "office_day", "floors": 3, "origin_weights": [1, 0, 0]},
-            {"traffic": "office_day", "floors": 3, "origin_weights": [1, -1, 1]},
+            {"floors": 3, "origin_weights": [1, 0, 0]},
+            {"floors": 3, "origin_weights": [1, -1, 1]},
         ]
-        for data in bad:
-            with self.subTest(data=data), self.assertRaises(ValueError):
-                SimConfig.from_dict(data)
+        for case in bad:
+            with self.subTest(case=case), self.assertRaises(ValueError):
+                SimConfig.from_dict(office_data(**case))
 
     def test_parse_hhmm(self):
         self.assertEqual(parse_hhmm("06:45"), 6 * 3600 + 45 * 60)
@@ -92,25 +119,25 @@ class HorizonTests(unittest.TestCase):
         self.assertEqual(self._sim(SimConfig(floors=3, max_time=5000.0)).horizon, 5000.0)
 
     def test_office_day_auto_is_last_arrival_plus_margin(self):
-        self.assertEqual(self._sim(SimConfig(floors=3, traffic="office_day")).horizon, 1000.0 + 3600.0)
+        self.assertEqual(self._sim(office_cfg(floors=3)).horizon, 1000.0 + 3600.0)
 
     def test_office_day_margin_is_configurable(self):
-        cfg = SimConfig(floors=3, traffic="office_day", office={"drain_margin_s": 100})
+        cfg = office_cfg(floors=3, office={"drain_margin_s": 100})
         self.assertEqual(self._sim(cfg).horizon, 1100.0)
 
     def test_explicit_max_time_is_never_overridden(self):
-        cfg = SimConfig(floors=3, traffic="office_day", max_time=9000.0)
+        cfg = office_cfg(floors=3, max_time=9000.0)
         self.assertEqual(self._sim(cfg).horizon, 9000.0)
 
     def test_explicit_max_time_too_small_raises(self):
-        cfg = SimConfig(floors=3, traffic="office_day", max_time=1000.0)
+        cfg = office_cfg(floors=3, max_time=1000.0)
         with self.assertRaises(ValueError) as cm:
             self._sim(cfg)
         self.assertIn("1000", str(cm.exception))
         self.assertIn("4600", str(cm.exception))
 
     def test_config_is_not_mutated_and_summary_reports_the_horizon(self):
-        cfg = SimConfig(floors=3, traffic="office_day")
+        cfg = office_cfg(floors=3)
         sim = self._sim(cfg).run()
         self.assertIsNone(cfg.max_time)
         summary = summarize(sim)

@@ -56,7 +56,7 @@ CLI runs; pick another with `--variation ID`. A file without `variations` is one
 | `employees` | 300 | headcount for `traffic: "office_day"` (`passengers` and `arrival_rate` do not apply to it) |
 | `day_start`, `day_end` | `06:45`, `20:00` | `office_day` window: simulation time 0 is `day_start`; no request is generated after `day_end` |
 | `day_variation` | 1.0 | 0 = day-level shares exactly as configured, 1 = default spread between seeds. Individual employee schedules always depend on the seed |
-| `office` | `{}` | overrides for the `office_day` defaults (see below); unknown keys are rejected |
+| `office` | `{}` | the `office_day` settings (see below), written in `scenarios/office_day.json`; required for `office_day`, unknown keys are rejected |
 | `energy_model`, `energy_base`, `energy_per_passenger` | `simple`, 0.01, 0.002 | energy model and its constants (kWh per floor moved, extra kWh per passenger per floor) |
 
 ## Algorithms
@@ -103,10 +103,10 @@ The schedule depends on the seed only, never on the algorithm, so every algorith
 traffic. With `day_variation` above 0 each seed also gets slightly different day-level shares
 (late arrivals, lunch-out share, stay-late share, arrival peak). Meetings and breaks are
 *candidates*: one that would overlap another segment is dropped, so fewer than the configured
-number happen. The defaults are placeholders, not real office statistics; override them with the
-`office` key:
+number happen. The numbers are placeholders, not real office statistics. They are written in
+`scenarios/office_day.json` (its `office` block, which the code requires for `office_day`); edit them there:
 
-| `office` key | Default | Meaning |
+| `office` key | Value in `office_day.json` | Meaning |
 | --- | --- | --- |
 | `arrival_window`, `arrival_peak` | `["07:00","08:00"]`, `07:50` | on-time arrivals (triangular) |
 | `late_share`, `late_end` | 0.15, `09:30` | share who arrive late, and the latest late arrival |

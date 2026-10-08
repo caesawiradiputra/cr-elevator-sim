@@ -44,6 +44,8 @@ when `dev` is promoted. Each entry links to its design spec when there is one.
 
 ### Changed
 
+- The office-day numbers (arrivals, lunch, meetings, going home, day-to-day spread) are written in
+  `scenarios/office_day.json`, not in the code; `office_day` without them is an error that points to the file.
 - The named traffic patterns (`up_peak`, `down_peak`, `lunch`, `interfloor`) are gone from the code. `traffic` is
   `uniform`, `office_day`, or a mix written in the config (relative weights for trips up from the lobby, down to
   it, and between floors). The shipped mixes live in the scenario files (Office lunch's default is now the rush

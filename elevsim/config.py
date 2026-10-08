@@ -8,31 +8,17 @@ DEFAULT_MAX_TIME = 4 * 3600.0  # hard stop used when max_time is None and the tr
 SCHEDULED_TRAFFIC = ("office_day",)  # traffic built by a scheduler (elevsim/schedule.py), not a mix below
 ENERGY_MODELS = ("simple",)  # names known to elevsim/energy.py
 
-# Defaults for traffic="office_day". Times are "HH:MM", durations are minutes, the
-# rest are shares (0-1), rates per person or seconds. Override any of them with the
-# `office` config key; unknown keys are rejected. These are placeholders, not real
-# office statistics.
-OFFICE_DEFAULTS = {
-    "arrival_window": ["07:00", "08:00"],  # on-time arrivals, triangular
-    "arrival_peak": "07:50",  # most likely arrival time inside the window
-    "late_share": 0.15,  # share who arrive late, between the window end and late_end
-    "late_end": "09:30",
-    "lunch_center": "12:00",  # lunch departures spread around this time
-    "lunch_spread_min": 30,  # +/- minutes
-    "lunch_out_share": 0.40,  # leave the building (desk -> lobby -> desk)
-    "lunch_cafe_share": 0.30,  # cafeteria on the lobby floor only; the rest eat at the desk
-    "lunch_out_min": [30, 60],  # time away
-    "lunch_cafe_min": [15, 40],
-    "work_window": ["09:00", "17:00"],  # meetings and breaks start inside this window
-    "meetings_per_person": 1.0,  # candidate rate; some are dropped when they overlap
-    "breaks_per_person": 0.7,
-    "meeting_min": [30, 60],
-    "break_min": [10, 20],
-    "home_window": ["17:00", "17:45"],  # most leave here; stay-late people leave until day_end
-    "stay_late_share": 0.20,
-    "min_trip_gap_s": 600,  # minimum seconds between one person's consecutive requests
-    "drain_margin_s": 3600,  # time after the last request that the simulation may run
-}
+# The settings traffic="office_day" needs in the `office` config key. Their values are written in
+# scenarios/office_day.json (times are "HH:MM", durations are minutes, the rest are shares between 0
+# and 1, rates per person, or seconds); the code has no defaults for them. `day_spread` is how far
+# each day-level value may move between seeds when day_variation is 1.
+OFFICE_KEYS = (
+    "arrival_window", "arrival_peak", "late_share", "late_end",
+    "lunch_center", "lunch_spread_min", "lunch_out_share", "lunch_cafe_share", "lunch_out_min", "lunch_cafe_min",
+    "work_window", "meetings_per_person", "breaks_per_person", "meeting_min", "break_min",
+    "home_window", "stay_late_share", "min_trip_gap_s", "drain_margin_s", "day_spread",
+)
+SPREAD_KEYS = ("late_share", "lunch_out_share", "stay_late_share", "peak_shift_s")
 
 # Passenger traffic is "uniform" (any floor to any floor), a scheduled scenario such as
 # "office_day" (SCHEDULED_TRAFFIC), or a mix: a dict of relative weights for three kinds of trip.
@@ -167,7 +153,7 @@ class SimConfig:
     day_start: str = "06:45"  # simulation time 0, as HH:MM
     day_end: str = "20:00"  # latest time any request may be generated
     day_variation: float = 1.0  # 0 = day-level shares exactly as configured, 1 = default spread
-    office: dict = field(default_factory=dict)  # overrides for OFFICE_DEFAULTS
+    office: dict = field(default_factory=dict)  # the office_day settings (OFFICE_KEYS), from scenarios/office_day.json
 
     # Energy (see elevsim/energy.py). The simple model's constants are uncalibrated, so
     # energy_kwh is a comparative estimate for ranking algorithms, not an absolute figure.
@@ -205,7 +191,7 @@ class SimConfig:
             raise ValueError("energy_base and energy_per_passenger must be >= 0")
         if not isinstance(self.office, dict):
             raise ValueError("office must be a dict of overrides")
-        unknown = set(self.office) - set(OFFICE_DEFAULTS)
+        unknown = set(self.office) - set(OFFICE_KEYS)
         if unknown:
             raise ValueError(f"unknown office keys: {sorted(unknown)}")
         if self.traffic == "office_day":
@@ -231,8 +217,8 @@ class SimConfig:
             raise ValueError("traffic mix weights must not all be zero")
 
     def office_settings(self) -> dict:
-        """OFFICE_DEFAULTS with the `office` overrides applied."""
-        return {**OFFICE_DEFAULTS, **self.office}
+        """The `office` block (office_day settings, as written in the scenario file)."""
+        return dict(self.office)
 
     @staticmethod
     def _validate_office_types(o: dict) -> None:
@@ -249,8 +235,19 @@ class SimConfig:
             value = o[name]
             if not (isinstance(value, (list, tuple)) and len(value) == 2):
                 raise ValueError(f'office.{name} must be ["HH:MM", "HH:MM"]')
+        spread = o["day_spread"]
+        if not isinstance(spread, dict) or set(spread) != set(SPREAD_KEYS) or not all(
+            _is_number(x) and x >= 0 for x in spread.values()
+        ):
+            raise ValueError(f"office.day_spread must give a number >= 0 for each of {list(SPREAD_KEYS)}")
 
     def _validate_office_day(self) -> None:
+        missing = [k for k in OFFICE_KEYS if k not in self.office]
+        if missing:
+            raise ValueError(
+                f"office_day needs these office settings: {missing}; they are written in "
+                f"scenarios/office_day.json (run it with --config scenarios/office_day.json)"
+            )
         if isinstance(self.employees, bool) or not isinstance(self.employees, int):
             raise ValueError("employees must be a whole number")
         if self.employees < 1:

@@ -23,6 +23,13 @@ tests and the CI smoke commands before and after.
   standard library only, Pyodide 0.26.4, GitHub Actions versions, Node for the JS syntax check,
   the unpinned `@playwright/mcp@latest`) in a `docs/tech-stack.md`, and write the upgrade strategy:
   when and how each is bumped, what to test, who decides. (2026-10-08)
+- [ ] Typed models for the dict-shaped parts: small dataclasses (for example `TrafficMix`,
+  `OfficeSettings`, `Scenario` with `Variation`) that load from and save to the same JSON, so a
+  typo is caught and attribute access replaces string keys, while JSON stays the file format and
+  the engine and Pyodide boundary keep passing plain dicts. `SimConfig` and the strategies are
+  already classes. If plain dicts turn out simpler, keeping them and adding only the class
+  names is fine. Better done as one refactor session after the scenario-file layout settles.
+  (2026-10-08)
 - [ ] Documentation session: README, `docs/code-map.md` and docstrings brought up
   to date with the code, written for a reader new to the codebase. (2026-10-08)
 - [ ] Mentoring walkthrough after each mid or big feature: explain each module and

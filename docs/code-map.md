@@ -22,7 +22,7 @@ config (JSON scenario / CLI flags / viewer form)
 
 | File | What it does | Look here to change |
 | --- | --- | --- |
-| `elevsim/config.py` | `SimConfig` dataclass, validation, `OFFICE_DEFAULTS`, `parse_hhmm` | add or rename a setting, change a default, add a validation rule |
+| `elevsim/config.py` | `SimConfig` dataclass, validation, `OFFICE_KEYS`, `parse_hhmm` | add or rename a setting, change a default, add a validation rule |
 | `elevsim/model.py` | `Passenger`, `HallCall`, `Elevator` and the state names | add a per-car or per-passenger counter |
 | `elevsim/engine.py` | `Simulation`: arrivals, car state machine, statistics, frame recording | how cars move, board and open doors; the stop time (`_resolve_horizon`); frame sampling (`_frames_every`) |
 | `elevsim/passengers.py` | `generate_passengers`: seeded Poisson arrivals and traffic mixes | change how a trip is drawn (the mix numbers themselves are in the scenario files) |
@@ -41,7 +41,7 @@ config (JSON scenario / CLI flags / viewer form)
 
 | Goal | Edit |
 | --- | --- |
-| The office day's shape (arrival times, lunch split, meetings per person) | the `OFFICE_DEFAULTS` dict in `config.py`, or the `office` key of a scenario JSON, no code needed |
+| The office day's shape (arrival times, lunch split, meetings per person) | the `office` block of `scenarios/office_day.json`, no code needed |
 | How the schedule is built | `_employee_trips` in `schedule.py` |
 | What energy costs | `SimpleEnergy.car_energy_kwh` in `energy.py`, or the `energy_*` settings |
 | A new metric shown everywhere | `METRICS` and `summarize` in `metrics.py`, then `TABLE_METRICS` / `SHORT` in `cli.py`, then `renderFinal` and `cols` in `viewer/app.js` (these three lists are hardcoded separately) |

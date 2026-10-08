@@ -7,11 +7,11 @@ from elevsim.model import Passenger
 from elevsim.passengers import generate_passengers
 from elevsim.schedule import generate_office_day
 from elevsim.strategies import STRATEGIES, get_strategy
+from tests.office_helpers import office_data
 
 
 def office(**kw):
-    base = {"floors": 15, "elevators": 4, "capacity": 10, "traffic": "office_day", "employees": 60, "seed": 1}
-    return SimConfig.from_dict({**base, **kw})
+    return SimConfig.from_dict(office_data(**{"employees": 60, "seed": 1, **kw}))
 
 
 def as_tuples(people):
@@ -79,6 +79,16 @@ class SchedulerTests(unittest.TestCase):
         d1, _ = generate_office_day(office(day_variation=1.0, seed=1))
         d2, _ = generate_office_day(office(day_variation=1.0, seed=2))
         self.assertNotEqual(d1.profile, d2.profile)
+
+    def test_the_day_to_day_spread_comes_from_the_office_settings(self):
+        no_spread = {"late_share": 0, "lunch_out_share": 0, "stay_late_share": 0, "peak_shift_s": 0}
+        base = office().office_settings()
+        profiles = [generate_office_day(office(seed=s, office={"day_spread": no_spread}))[0].profile for s in (1, 2, 3)]
+        self.assertTrue(all(p == profiles[0] for p in profiles))  # zero spread: the same day-level values for every seed
+        self.assertEqual(profiles[0]["late_share"], base["late_share"])
+        wide = {**no_spread, "late_share": 0.1}
+        late = {generate_office_day(office(seed=s, office={"day_spread": wide}))[0].profile["late_share"] for s in range(8)}
+        self.assertGreater(len(late), 1)
 
     def test_variation_clamps_shares(self):
         cfg_kwargs = {"office": {"lunch_out_share": 0.9, "lunch_cafe_share": 0.1}, "day_variation": 3.0, "employees": 5}
@@ -197,7 +207,7 @@ class FrameTests(unittest.TestCase):
         self.assertAlmostEqual(frames[1][0] - frames[0][0], interval, places=3)
 
     def test_cap_holds_for_a_very_long_day(self):
-        cfg = SimConfig(floors=3, traffic="office_day")
+        cfg = office(floors=3)
         person = Passenger(id=0, arrival=60000.0, origin=0, dest=1)
         sim = Simulation(cfg, get_strategy("collective"), passengers=[person]).run(record=True)
         self.assertLessEqual(len(sim.frames), 10_000)

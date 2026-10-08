@@ -31,9 +31,6 @@ from dataclasses import dataclass, field
 from .config import SimConfig, parse_hhmm
 from .model import Passenger
 
-# Day-level deviation: each value is drawn uniformly within value +/- spread * day_variation.
-SPREADS = {"late_share": 0.05, "lunch_out_share": 0.10, "stay_late_share": 0.08, "peak_shift_s": 300.0}
-
 _STAT_KEYS = (
     "lunch_out", "lunch_cafe", "lunch_desk",
     "meeting_candidates", "meeting_placed", "break_candidates", "break_placed",
@@ -108,10 +105,10 @@ def draw_profile(cfg: SimConfig, o: dict, tm: dict, rng: random.Random) -> dict:
         u = rng.uniform(-1.0, 1.0)  # always drawn, so the random stream does not depend on day_variation
         return min(1.0, max(0.0, value + u * spread * k))
 
-    late = vary(o["late_share"], SPREADS["late_share"])
-    lunch_out = vary(o["lunch_out_share"], SPREADS["lunch_out_share"])
-    stay_late = vary(o["stay_late_share"], SPREADS["stay_late_share"])
-    shift = rng.uniform(-1.0, 1.0) * SPREADS["peak_shift_s"] * k
+    late = vary(o["late_share"], o["day_spread"]["late_share"])
+    lunch_out = vary(o["lunch_out_share"], o["day_spread"]["lunch_out_share"])
+    stay_late = vary(o["stay_late_share"], o["day_spread"]["stay_late_share"])
+    shift = rng.uniform(-1.0, 1.0) * o["day_spread"]["peak_shift_s"] * k
     a0, a1 = tm["arrival"]
     peak = min(a1, max(a0, parse_hhmm(o["arrival_peak"]) + shift))
     return {

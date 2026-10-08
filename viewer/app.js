@@ -86,6 +86,11 @@
       const v = $(f).value;
       cfg[f] = NUMERIC.has(f) ? Number(v) : v;
     }
+    if (cfg.traffic === "office_day" && !cfg.office) {
+      // Custom settings carry no office block; take it from the shipped office-day scenario.
+      const source = DATA.presets.find((p) => p.config.traffic === "office_day" && p.config.office);
+      if (source) cfg.office = source.config.office;
+    }
     if (cfg.traffic === "mix") {
       cfg.traffic = {};
       for (const [key, id] of Object.entries(MIX_FIELDS)) cfg.traffic[key] = Number($(id).value) / 100;

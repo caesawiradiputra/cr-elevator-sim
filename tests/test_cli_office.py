@@ -37,8 +37,11 @@ class CliOfficeTests(unittest.TestCase):
                 main(list(argv))
             self.assertIn("--employees", str(cm.exception.code))
 
-    def test_traffic_flag_accepts_office_day(self):
-        text = run_cli("run", "-s", "collective", "--traffic", "office_day", "--employees", "10")
+    def test_office_day_needs_the_scenario_file(self):
+        with self.assertRaises(SystemExit) as cm:
+            main(["run", "-s", "collective", "--traffic", "office_day", "--employees", "10"])
+        self.assertIn("scenarios/office_day.json", str(cm.exception.code))
+        text = run_cli("run", "-s", "collective", "--config", SCENARIO, "--traffic", "office_day", "--employees", "10")
         self.assertIn("10 employees", text)
 
     def test_existing_output_keeps_its_shape(self):

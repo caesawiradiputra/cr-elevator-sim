@@ -1,6 +1,6 @@
 # Full-day office scenario and energy metric: design
 
-Status: **approved (v5); amended on 2026-10-08 while planning: 3.2 (fast-forward dropped after profiling), 3.4 (`office` dict instead of flat keys), 3.5 (frame cap divisor 9997, `office_day` only). The amendments need the user's confirmation.**
+Status: **approved (v5); amended on 2026-10-08 while planning: 3.2 (fast-forward dropped after profiling), 3.4 (`office` dict instead of flat keys), 3.5 (frame cap divisor 9997, `office_day` only). The amendments need the user's confirmation. Later change (2026-10-08, user request): the office-day numbers live in `scenarios/office_day.json` and `OFFICE_DEFAULTS` is gone from the code (`OFFICE_KEYS` lists the required names).**
 (brainstorming, architectural path).
 Date: 2026-10-08. Branch: `feat/office-day-scenario`.
 Current version: `0.1.0`. Target version: `0.2.0` (minor: new feature), a plan
