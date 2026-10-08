@@ -35,6 +35,25 @@ tests and the CI smoke commands before and after.
 - [ ] Mentoring walkthrough after each mid or big feature: explain each module and
   where to find code to check or change by hand. (2026-10-08)
 
+## Platform and architecture
+
+- [ ] After the in-browser Python: the user's direction on 2026-10-08 is that Pyodide in the
+  viewer is only for the beginning and for testing, and a more complex UI (even a mobile app)
+  comes later. Three ways to run the engine behind such a UI, to be chosen in its own
+  brainstorm: (a) keep the Python engine on a server behind an API, which needs the least
+  rewriting and is also what verifying a leaderboard needs, but the app then needs a network;
+  (b) port the engine to the UI's language (TypeScript, Kotlin, Swift or Dart), which works
+  offline but means maintaining two engines; (c) run Python on the device, which is heavy and
+  rarely worth it. What keeps every option open today: the engine is pure standard library with
+  no browser code in it; a run is a JSON config in and a JSON result out (`run_json`,
+  `compare_json`); scenarios are JSON files. Cheap preparation: write that JSON contract down
+  (config keys, summary keys, trace format) and give the trace a version number. Because runs
+  are deterministic per seed, saved results (golden files) can prove that a port or a rewritten
+  engine gives identical output, so the existing tests double as the port's conformance suite.
+  Knock-on effects: the hosting entry below assumes a static site, which only holds while the
+  engine runs in the browser; a server engine needs a real host; `viewer/app.js` is the part
+  that gets replaced, not the engine. (2026-10-08)
+
 ## Hosting and accounts
 
 - [ ] Publish the app. Assessment on 2026-10-08: the viewer is one generated file
