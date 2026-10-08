@@ -77,6 +77,10 @@ tests and the CI smoke commands before and after.
 
 ## Viewer
 
+- [ ] Scenario notes in the viewer: show a short description of the selected scenario under the
+  Scenario dropdown (like the strategy note) or in a pop-up, at least for the template scenarios,
+  so the setup can be read without opening the JSON. The scenario files already carry a
+  `description`; `viewer_build._presets()` currently drops it. (2026-10-08)
 - [ ] Game-quality smoothness: the animation is grainy and jumpy. Scale time range, speed and
   number of people by a ratio so playback looks smooth, for example a view scale that picks
   the display speed from the simulated span, draws one dot per N people when queues are large,
