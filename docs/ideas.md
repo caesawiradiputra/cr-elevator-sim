@@ -57,6 +57,21 @@ tests and the CI smoke commands before and after.
 - [ ] Attendance states per employee per day: sick, leave, half day (morning or
   afternoon), late, truant. Decide whether absences come in streaks. (2026-10-08)
 
+## Algorithms
+
+- [ ] Cooperative cars: a strategy where each car knows the other cars' positions and current and
+  next actions and plans its own next move around them (no central dispatcher assigning calls).
+  The cars must not know how many passengers wait for a call (only that a hall call exists), and
+  a config option sets a direction preference: prioritise up-to-down, down-to-up, or none.
+  Status on 2026-10-08: nearest car and ETA already use other cars' positions and assigned stops,
+  but through a central dispatcher; no strategy lets each car decide for itself, and none has a
+  direction preference. Today no strategy reads queue sizes, but that is a convention, not
+  enforced (a strategy receives the whole simulation). Strategy options exist (only `eta` uses
+  them) but the viewer does not expose them yet. Open questions for the brainstorm: what
+  "prioritise" means exactly (tie-break only, or also where idle cars park), and whether to
+  give strategies a restricted view of the simulation so the "does not know passenger counts"
+  rule is enforced by a test. (2026-10-08)
+
 ## Energy
 
 - [ ] Counterweight energy model (balanced at about 40-50% load). (2026-10-08)
