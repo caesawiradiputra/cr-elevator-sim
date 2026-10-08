@@ -4,6 +4,13 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field, fields
 
+class ConfigError(ValueError):
+    """Invalid configuration, whether a value is out of range or of the wrong type.
+
+    A ValueError subclass, so callers (the CLI, the tests) catch one type for every config problem.
+    """
+
+
 DEFAULT_MAX_TIME = 4 * 3600.0  # hard stop used when max_time is None and the traffic is not scheduled
 SCHEDULED_TRAFFIC = ("office_day",)  # traffic built by a scheduler (elevsim/schedule.py), not a mix below
 ENERGY_MODELS = ("simple",)  # names known to elevsim/energy.py
@@ -39,9 +46,9 @@ def parse_hhmm(text: str) -> int:
         hours, minutes = text.split(":")
         h, m = int(hours), int(minutes)
     except (AttributeError, ValueError):
-        raise ValueError(f"time must look like HH:MM, got {text!r}") from None
+        raise ConfigError(f"time must look like HH:MM, got {text!r}") from None
     if not (0 <= h < 24 and 0 <= m < 60):
-        raise ValueError(f"time must look like HH:MM between 00:00 and 23:59, got {text!r}")
+        raise ConfigError(f"time must look like HH:MM between 00:00 and 23:59, got {text!r}")
     return h * 3600 + m * 60
 
 
@@ -58,14 +65,14 @@ def _variations_by_id(data: dict) -> dict:
     for variation in data.get("variations") or []:
         vid = variation.get("id") if isinstance(variation, dict) else None
         if not isinstance(vid, str) or not vid:
-            raise ValueError("every variation needs a non-empty string id")
+            raise ConfigError("every variation needs a non-empty string id")
         if vid in by_id:
-            raise ValueError(f"duplicate variation id {vid!r}")
+            raise ConfigError(f"duplicate variation id {vid!r}")
         by_id[vid] = variation
     if not by_id:
         for key in ("enabled_variations", "default_variation"):
             if key in data:
-                raise ValueError(f"{key} needs a variations list")
+                raise ConfigError(f"{key} needs a variations list")
     return by_id
 
 
@@ -73,9 +80,9 @@ def _enabled_ids(data: dict, by_id: dict) -> list[str]:
     enabled = list(data.get("enabled_variations", by_id))
     unknown = [i for i in enabled if i not in by_id]
     if unknown:
-        raise ValueError(f"enabled_variations names unknown variations: {unknown}")
+        raise ConfigError(f"enabled_variations names unknown variations: {unknown}")
     if by_id and not enabled:
-        raise ValueError("enabled_variations must not be empty")
+        raise ConfigError("enabled_variations must not be empty")
     return enabled
 
 
@@ -87,7 +94,7 @@ def scenario_default_id(data: dict) -> str | None:
     enabled = _enabled_ids(data, by_id)
     default = data.get("default_variation", enabled[0])
     if default not in enabled:
-        raise ValueError(f"default_variation {default!r} must be one of enabled_variations {enabled}")
+        raise ConfigError(f"default_variation {default!r} must be one of enabled_variations {enabled}")
     return default
 
 
@@ -107,11 +114,11 @@ def resolve_scenario(data: dict, variation: str | None = None) -> dict:
     root = {k: v for k, v in data.items() if k not in SCENARIO_META_KEYS}
     if not by_id:
         if variation is not None:
-            raise ValueError(f"this scenario has no variations (asked for {variation!r})")
+            raise ConfigError(f"this scenario has no variations (asked for {variation!r})")
         return root
     chosen = default if variation is None else variation
     if chosen not in by_id:
-        raise ValueError(f"unknown variation {chosen!r}; choose from {sorted(by_id)}")
+        raise ConfigError(f"unknown variation {chosen!r}; choose from {sorted(by_id)}")
     return {**root, **{k: v for k, v in by_id[chosen].items() if k not in VARIATION_META_KEYS}}
 
 
@@ -163,37 +170,37 @@ class SimConfig:
 
     extra: dict = field(default_factory=dict)  # free-form, passed to strategies
 
-    def validate(self) -> "SimConfig":
+    def validate(self) -> SimConfig:
         if self.floors < 2:
-            raise ValueError("floors must be >= 2")
+            raise ConfigError("floors must be >= 2")
         if self.elevators < 1:
-            raise ValueError("elevators must be >= 1")
+            raise ConfigError("elevators must be >= 1")
         if self.capacity < 1:
-            raise ValueError("capacity must be >= 1")
+            raise ConfigError("capacity must be >= 1")
         if not 0 <= self.lobby_floor < self.floors:
-            raise ValueError("lobby_floor must be a valid floor")
+            raise ConfigError("lobby_floor must be a valid floor")
         if self.arrival_rate <= 0:
-            raise ValueError("arrival_rate must be > 0")
+            raise ConfigError("arrival_rate must be > 0")
         if self.dt <= 0:
-            raise ValueError("dt must be > 0")
+            raise ConfigError("dt must be > 0")
         self._validate_traffic()
         for name in ("origin_weights", "destination_weights"):
             w = getattr(self, name)
             if w is not None and len(w) != self.floors:
-                raise ValueError(f"{name} must have one weight per floor ({self.floors})")
+                raise ConfigError(f"{name} must have one weight per floor ({self.floors})")
         if self.idle_parking not in ("stay", "lobby"):
-            raise ValueError("idle_parking must be 'stay' or 'lobby'")
+            raise ConfigError("idle_parking must be 'stay' or 'lobby'")
         if self.max_time is not None and self.max_time <= 0:
-            raise ValueError("max_time must be > 0 (or null for auto)")
+            raise ConfigError("max_time must be > 0 (or null for auto)")
         if self.energy_model not in ENERGY_MODELS:
-            raise ValueError(f"unknown energy_model {self.energy_model!r}; choose from {list(ENERGY_MODELS)}")
+            raise ConfigError(f"unknown energy_model {self.energy_model!r}; choose from {list(ENERGY_MODELS)}")
         if self.energy_base < 0 or self.energy_per_passenger < 0:
-            raise ValueError("energy_base and energy_per_passenger must be >= 0")
+            raise ConfigError("energy_base and energy_per_passenger must be >= 0")
         if not isinstance(self.office, dict):
-            raise ValueError("office must be a dict of overrides")
+            raise ConfigError("office must be a dict of overrides")
         unknown = set(self.office) - set(OFFICE_KEYS)
         if unknown:
-            raise ValueError(f"unknown office keys: {sorted(unknown)}")
+            raise ConfigError(f"unknown office keys: {sorted(unknown)}")
         if self.traffic == "office_day":
             self._validate_office_day()
         return self
@@ -202,19 +209,19 @@ class SimConfig:
         t = self.traffic
         if isinstance(t, str):
             if t != "uniform" and t not in SCHEDULED_TRAFFIC:
-                raise ValueError(
+                raise ConfigError(
                     f"unknown traffic {t!r}; choose from {sorted(['uniform', *SCHEDULED_TRAFFIC])} "
                     f"or give a mix of {list(TRAFFIC_MIX_KEYS)} weights"
                 )
             return
         if not isinstance(t, dict):
-            raise ValueError("traffic must be a name or a mix dict")
+            raise ConfigError("traffic must be a name or a mix dict")
         if not t or set(t) - set(TRAFFIC_MIX_KEYS):
-            raise ValueError(f"traffic mix keys must be among {list(TRAFFIC_MIX_KEYS)}, got {sorted(t)}")
+            raise ConfigError(f"traffic mix keys must be among {list(TRAFFIC_MIX_KEYS)}, got {sorted(t)}")
         if not all(_is_number(w) and w >= 0 for w in t.values()):
-            raise ValueError("traffic mix weights must be numbers >= 0")
+            raise ConfigError("traffic mix weights must be numbers >= 0")
         if sum(t.values()) <= 0:
-            raise ValueError("traffic mix weights must not all be zero")
+            raise ConfigError("traffic mix weights must not all be zero")
 
     def office_settings(self) -> dict:
         """The `office` block (office_day settings, as written in the scenario file)."""
@@ -226,55 +233,55 @@ class SimConfig:
         for name in ("late_share", "lunch_spread_min", "lunch_out_share", "lunch_cafe_share", "meetings_per_person",
                      "breaks_per_person", "stay_late_share", "min_trip_gap_s", "drain_margin_s"):
             if not _is_number(o[name]):
-                raise ValueError(f"office.{name} must be a number")
+                raise ConfigError(f"office.{name} must be a number")
         for name in ("lunch_out_min", "lunch_cafe_min", "meeting_min", "break_min"):
             value = o[name]
             if not (isinstance(value, (list, tuple)) and len(value) == 2 and all(_is_number(x) for x in value)):
-                raise ValueError(f"office.{name} must be [low, high] minutes (two numbers)")
+                raise ConfigError(f"office.{name} must be [low, high] minutes (two numbers)")
         for name in ("arrival_window", "work_window", "home_window"):
             value = o[name]
             if not (isinstance(value, (list, tuple)) and len(value) == 2):
-                raise ValueError(f'office.{name} must be ["HH:MM", "HH:MM"]')
+                raise ConfigError(f'office.{name} must be ["HH:MM", "HH:MM"]')
         spread = o["day_spread"]
         if not isinstance(spread, dict) or set(spread) != set(SPREAD_KEYS) or not all(
             _is_number(x) and x >= 0 for x in spread.values()
         ):
-            raise ValueError(f"office.day_spread must give a number >= 0 for each of {list(SPREAD_KEYS)}")
+            raise ConfigError(f"office.day_spread must give a number >= 0 for each of {list(SPREAD_KEYS)}")
 
     def _validate_office_day(self) -> None:
         missing = [k for k in OFFICE_KEYS if k not in self.office]
         if missing:
-            raise ValueError(
+            raise ConfigError(
                 f"office_day needs these office settings: {missing}; they are written in "
                 f"scenarios/office_day.json (run it with --config scenarios/office_day.json)"
             )
         if isinstance(self.employees, bool) or not isinstance(self.employees, int):
-            raise ValueError("employees must be a whole number")
+            raise ConfigError("employees must be a whole number")
         if self.employees < 1:
-            raise ValueError("employees must be >= 1")
+            raise ConfigError("employees must be >= 1")
         if not _is_number(self.day_variation) or self.day_variation < 0:
-            raise ValueError("day_variation must be a number >= 0")
+            raise ConfigError("day_variation must be a number >= 0")
         if self.origin_weights is not None:
             desk_weights = [w for f, w in enumerate(self.origin_weights) if f != self.lobby_floor]
             if any(w < 0 for w in desk_weights) or not any(w > 0 for w in desk_weights):
-                raise ValueError("origin_weights must be >= 0 and leave at least one desk floor besides the lobby")
+                raise ConfigError("origin_weights must be >= 0 and leave at least one desk floor besides the lobby")
         o = self.office_settings()
         self._validate_office_types(o)
         for name in ("late_share", "lunch_out_share", "lunch_cafe_share", "stay_late_share"):
             if not 0.0 <= o[name] <= 1.0:
-                raise ValueError(f"office.{name} must be between 0 and 1")
+                raise ConfigError(f"office.{name} must be between 0 and 1")
         if o["lunch_out_share"] + o["lunch_cafe_share"] > 1.0:
-            raise ValueError("office.lunch_out_share + office.lunch_cafe_share must not exceed 1")
+            raise ConfigError("office.lunch_out_share + office.lunch_cafe_share must not exceed 1")
         for name in ("meetings_per_person", "breaks_per_person", "drain_margin_s", "lunch_spread_min"):
             if o[name] < 0:
-                raise ValueError(f"office.{name} must be >= 0")
+                raise ConfigError(f"office.{name} must be >= 0")
         gap = o["min_trip_gap_s"]
         if gap <= 0:
-            raise ValueError("office.min_trip_gap_s must be > 0")
+            raise ConfigError("office.min_trip_gap_s must be > 0")
         for name in ("lunch_out_min", "lunch_cafe_min", "meeting_min", "break_min"):
             low, high = o[name]
             if not low <= high or low * 60 < gap:
-                raise ValueError(
+                raise ConfigError(
                     f"office.{name} must be [low, high] minutes with low <= high and low x 60 >= min_trip_gap_s"
                 )
         start, end = parse_hhmm(self.day_start), parse_hhmm(self.day_end)
@@ -298,21 +305,21 @@ class SimConfig:
         ]
         for ok, message in checks:
             if not ok:
-                raise ValueError(message)
+                raise ConfigError(message)
 
     def to_dict(self) -> dict:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: dict) -> "SimConfig":
+    def from_dict(cls, data: dict) -> SimConfig:
         known = {f.name for f in fields(cls)}
         unknown = set(data) - known
         if unknown:
-            raise ValueError(f"unknown config keys: {sorted(unknown)}")
+            raise ConfigError(f"unknown config keys: {sorted(unknown)}")
         return cls(**data).validate()
 
     @classmethod
-    def from_file(cls, path: str, variation: str | None = None) -> "SimConfig":
+    def from_file(cls, path: str, variation: str | None = None) -> SimConfig:
         with open(path) as fh:
             data = json.load(fh)
         return cls.from_dict(resolve_scenario(data, variation))

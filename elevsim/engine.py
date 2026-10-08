@@ -96,7 +96,7 @@ class Simulation:
         return cfg.max_time
 
     # --------------------------------------------------------------------- run
-    def run(self, record: bool = False, frame_interval: float = 0.5) -> "Simulation":
+    def run(self, record: bool = False, frame_interval: float = 0.5) -> Simulation:
         if record:
             self.frames = []
             self._frame_every = self._frames_every(frame_interval)

@@ -4,6 +4,7 @@ import unittest
 
 from elevsim import SimConfig
 from elevsim.cli import main
+from elevsim.config import ConfigError
 from elevsim.passengers import generate_passengers
 
 
@@ -15,6 +16,13 @@ def run_cli(*argv):
 
 
 class TrafficMixValidationTests(unittest.TestCase):
+    def test_config_problems_are_config_errors_and_still_value_errors(self):
+        # wrong type and wrong value alike: one error type for callers, a ValueError subclass for old code
+        for traffic in (5, "rush", {"incoming": -1}):
+            with self.subTest(traffic=traffic), self.assertRaises(ConfigError) as cm:
+                SimConfig(traffic=traffic).validate()
+            self.assertIsInstance(cm.exception, ValueError)
+
     def test_a_mix_is_relative_weights(self):
         SimConfig(traffic={"incoming": 3, "outgoing": 1, "interfloor": 0}).validate()  # need not sum to 1
         SimConfig(traffic={"outgoing": 1}).validate()  # missing kinds count as 0
