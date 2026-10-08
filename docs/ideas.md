@@ -106,6 +106,26 @@ tests and the CI smoke commands before and after.
 
 ## Engine performance
 
+- [ ] Bigger data: dataframes (pandas) or a database for results once runs, seeds and
+  scenarios pile up. Constraints on 2026-10-08: the project is standard library only and the
+  engine must import under Pyodide, so keep pandas out of the engine and use it only on the
+  analysis side (for example reading `compare.csv`). pandas does exist as a Pyodide package but
+  adds a large download to the viewer. The standard library already has `sqlite3`, which also
+  works in Pyodide, so a results database can start there with no new dependency. Not needed
+  yet: a full-day run is about 1 s and the outputs are small JSON and CSV files. (2026-10-08)
+- [ ] Events in the middle of a simulation: a car breaks down, its lights go out, a door
+  sticks, random incidents. Today the engine runs a whole run in one call and all passengers
+  are generated up front, but it already advances one tick at a time (`step`), so injecting
+  events is feasible. Design points: events drawn from the seed and scheduled in advance keep
+  every algorithm facing the same incidents (fair, reproducible); events a person injects live
+  are not reproducible unless they are recorded in the trace; strategies must be told a car is
+  out of service. Related to the interactive game idea and to cooperative cars. (2026-10-08)
+- [ ] Real-time decisions during a run: pause, inspect and decide while the simulation is
+  running (needed for a game, and for reacting to events). Today the viewer plays a precomputed
+  trace: the Python side returns a whole run, so live control needs an incremental interface
+  (advance N ticks, read state, apply a decision) exposed through Pyodide. Strategies already
+  decide every tick, so the engine side is mostly a thin stepping API. (2026-10-08)
+
 - [ ] Idle fast-forward: when all cars are idle and nothing is waiting, jump the clock to the next
   event. Dropped from 0.2.0 because a full-day run takes about 1 s natively (2026-10-08 profiling).
   Needed for the 24-hour window and multi-day weeks. Constraints found in review: strategies with
