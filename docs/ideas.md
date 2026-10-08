@@ -28,6 +28,23 @@ tests and the CI smoke commands before and after.
 - [ ] Mentoring walkthrough after each mid or big feature: explain each module and
   where to find code to check or change by hand. (2026-10-08)
 
+## Hosting and accounts
+
+- [ ] Publish the app. Assessment on 2026-10-08: the viewer is one generated file
+  (`dist/viewer.html`, about 0.5 MB) and the Python engine runs inside the browser through
+  Pyodide, so it needs a static host only: no server, no database. Free options: GitHub Pages
+  (the repo is already on GitHub; a CI step builds the file and publishes it), Cloudflare Pages
+  or Netlify. For early testing, `python3 -m http.server` from `dist/` is enough. Needs: HTTPS,
+  and internet access for the Pyodide files from the jsDelivr CDN, unless they are self-hosted
+  (`--pyodide-base`, adds several MB of files). Optional: a domain name. (2026-10-08)
+- [ ] Database and sign-in (Google or others). Not needed today: nothing is stored and nobody
+  has an account. It becomes necessary for saving scenarios or results across devices, shared
+  comparisons, or the game (progress, leaderboards). Free-tier options: Supabase or Firebase
+  (database plus Google sign-in), or Cloudflare D1 with Workers. Costs to plan for: storing
+  emails brings privacy duties, and a leaderboard cannot trust scores computed in the browser,
+  so the server would re-run the submitted seed and strategy with the same Python engine to
+  verify them. (2026-10-08)
+
 ## Game and reuse
 
 - [ ] Reuse the modelling in a game later: the office-day scheduler as the source
