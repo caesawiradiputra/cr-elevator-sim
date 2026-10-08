@@ -30,7 +30,9 @@ open trace files written by `run --trace`.
 ## Configuration
 
 Any option can come from a scenario file (`scenarios/*.json`) and be
-overridden on the command line.
+overridden on the command line. A scenario file may also list `variations`
+(a `name`, a `description` and the settings they override); the viewer shows them
+in a Variation dropdown, and the engine and CLI ignore them.
 
 | Key | Default | Meaning |
 | --- | --- | --- |
@@ -41,7 +43,7 @@ overridden on the command line.
 | `board_time` | 1.0 s | time per passenger getting in or out |
 | `passengers` | 200 | total passengers generated |
 | `arrival_rate` | 20 / min | mean Poisson arrival rate |
-| `traffic` | `uniform` | `uniform`, `up_peak`, `down_peak`, `lunch`, `interfloor`, or a mix dict `{"incoming": .5, "outgoing": .3, "interfloor": .2}` |
+| `traffic` | `uniform` | `uniform`, `up_peak`, `down_peak`, `lunch` (the rush down at the start of lunch), `lunch_balanced` (both ways), `interfloor`, `office_day`, or a mix dict `{"incoming": .5, "outgoing": .3, "interfloor": .2}` |
 | `origin_weights`, `destination_weights` | none | per-floor weights that override the traffic pattern |
 | `idle_parking` | `stay` | `stay` or `lobby` (idle cars return to the lobby after `park_delay`) |
 | `seed` | 1 | passenger generation seed |

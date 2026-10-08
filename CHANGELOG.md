@@ -36,11 +36,14 @@ when `dev` is promoted. Each entry links to its design spec when there is one.
   in the summary.
 - Summary keys `passengers_total` and `horizon`; CLI `--employees` and a kWh column in the compare table.
 - Viewer: the office scenario (live engine only), an HH:MM clock, energy rows, 120x and 600x speeds.
-- Viewer: a short explanation of how each scenario will run, under the Scenario dropdown.
+- Viewer: a short explanation of how each scenario will run, under the Scenario dropdown, and a
+  Variation dropdown for scenarios whose file lists `variations` (Office lunch has a balanced one).
 - `docs/code-map.md`, `docs/ideas.md` and the design spec and plan under `docs/superpowers/`.
 
 ### Changed
 
+- The `lunch` traffic pattern is now the rush down at the start of lunch (15% up from the lobby, 65% down,
+  20% between floors). The old 40/40/20 mix is kept as `lunch_balanced`.
 - `max_time` now defaults to `None` (auto): 4 hours for existing traffic, exactly as before, and the
   last request plus a drain margin for `office_day`. An explicit value is never overridden; one too
   small for `office_day` raises an error.

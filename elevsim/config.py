@@ -40,7 +40,8 @@ TRAFFIC_PATTERNS = {
     "uniform": None,  # origin and destination uniformly random over all floors
     "up_peak": {"incoming": 0.85, "outgoing": 0.05, "interfloor": 0.10},
     "down_peak": {"incoming": 0.05, "outgoing": 0.85, "interfloor": 0.10},
-    "lunch": {"incoming": 0.40, "outgoing": 0.40, "interfloor": 0.20},
+    "lunch": {"incoming": 0.15, "outgoing": 0.65, "interfloor": 0.20},  # the rush down at the start of lunch
+    "lunch_balanced": {"incoming": 0.40, "outgoing": 0.40, "interfloor": 0.20},  # the whole lunch hour, both ways
     "interfloor": {"incoming": 0.05, "outgoing": 0.05, "interfloor": 0.90},
 }
 
@@ -237,4 +238,5 @@ class SimConfig:
             data = json.load(fh)
         data.pop("name", None)
         data.pop("description", None)
+        data.pop("variations", None)  # viewer-only: named variations of this scenario
         return cls.from_dict(data)

@@ -33,7 +33,15 @@ def _presets() -> list[dict]:
         data = json.loads(path.read_text())
         name = data.pop("name", path.stem)
         description = data.pop("description", "")  # shown under the scenario dropdown, not sent to the engine
-        out.append({"id": path.stem, "name": name, "description": description, "config": data})
+        variations = [
+            {
+                "name": v["name"],
+                "description": v.get("description", ""),
+                "config": {**data, **{k: val for k, val in v.items() if k not in ("name", "description")}},
+            }
+            for v in data.pop("variations", [])
+        ]
+        out.append({"id": path.stem, "name": name, "description": description, "variations": variations, "config": data})
     return out
 
 

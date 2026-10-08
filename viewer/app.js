@@ -69,9 +69,9 @@
   function readForm() {
     // Start from the selected preset's full config so keys that have no form field (for
     // example the office settings) reach the engine, then let the form fields win.
-    const sel = $("preset").value;
-    const preset = sel !== "" ? DATA.presets[Number(sel)] : null;
-    const cfg = preset ? Object.assign({}, preset.config) : {};
+    const preset = currentPreset();
+    const variation = currentVariation();
+    const cfg = variation ? Object.assign({}, variation.config) : preset ? Object.assign({}, preset.config) : {};
     for (const f of CFG_FIELDS) {
       const v = $(f).value;
       cfg[f] = NUMERIC.has(f) ? Number(v) : v;
@@ -100,6 +100,7 @@
     preset.add(custom);
     (DATA.presets || []).forEach((p, i) => preset.add(new Option(p.name, String(i))));
     preset.value = keep || "";
+    populateVariations();
     updateScenarioNote();
     const strat = $("strategy");
     strat.innerHTML = "";
@@ -112,9 +113,31 @@
     metric.value = "avg_journey";
   }
   // How the selected scenario will run, in words; "Custom" means the fields are set by hand.
+  function currentPreset() {
+    return $("preset").value === "" ? null : DATA.presets[Number($("preset").value)] || null;
+  }
+  // The chosen variation of the current scenario, or null for the default version.
+  function currentVariation() {
+    const p = currentPreset();
+    const v = $("variation").value;
+    return p && p.variations && v !== "" ? p.variations[Number(v)] || null : null;
+  }
+  // The Variation dropdown exists only for scenarios whose file lists variations.
+  function populateVariations() {
+    const p = currentPreset();
+    const variations = p && p.variations ? p.variations : [];
+    const sel = $("variation");
+    sel.innerHTML = "";
+    $("field-variation").hidden = variations.length === 0;
+    if (!variations.length) return;
+    sel.add(new Option("Default", ""));
+    variations.forEach((v, i) => sel.add(new Option(v.name, String(i))));
+    sel.value = "";
+  }
   function updateScenarioNote() {
-    const p = $("preset").value === "" ? null : DATA.presets[Number($("preset").value)];
-    $("scenario-note").textContent = p ? p.description || "" : "Custom: set the building and traffic yourself in the fields below.";
+    const p = currentPreset();
+    const v = currentVariation();
+    $("scenario-note").textContent = p ? (v ? v.description : p.description) || "" : "Custom: set the building and traffic yourself in the fields below.";
   }
   function updateStrategyNote() {
     const s = strategies.find((x) => x.name === $("strategy").value);
@@ -125,13 +148,14 @@
   // Precomputed scenario matching the form, for when the engine is unavailable.
   function demoForForm() {
     const p = DATA.presets[Number($("preset").value)];
-    if ($("preset").value === "" || !p || !DATA.demo) return null;
+    if ($("preset").value === "" || !p || !DATA.demo || currentVariation()) return null;
     return DATA.demo.scenarios[p.id] || null;
   }
   function selectPreset(id) {
     const i = (DATA.presets || []).findIndex((p) => p.id === id);
     if (i < 0) return;
     $("preset").value = String(i);
+    populateVariations();
     fillForm(Object.assign({}, DEFAULTS, DATA.presets[i].config));
     updateScenarioNote();
   }
@@ -559,11 +583,19 @@
     $("strategy").onchange = () => { updateStrategyNote(); if (!py) runSimulation(); };
     $("preset").onchange = () => {
       const p = DATA.presets[Number($("preset").value)];
+      populateVariations();
       if (p) fillForm(Object.assign({}, DEFAULTS, p.config));
       updateScenarioNote();
       if (!py) { runSimulation(); runCompare(); }
     };
-    for (const f of CFG_FIELDS) if ($(f)) $(f).addEventListener("input", () => { if (document.activeElement === $(f)) { $("preset").value = ""; updateScenarioNote(); } });
+    for (const f of CFG_FIELDS) if ($(f)) $(f).addEventListener("input", () => { if (document.activeElement === $(f)) { $("preset").value = ""; populateVariations(); updateScenarioNote(); } });
+    $("variation").onchange = () => {
+      const p = currentPreset();
+      const v = currentVariation();
+      if (p) fillForm(Object.assign({}, DEFAULTS, v ? v.config : p.config));
+      updateScenarioNote();
+      if (!py) { runSimulation(); runCompare(); }
+    };
     $("traffic").addEventListener("change", syncTrafficFields);
     $("run-btn").onclick = runSimulation;
     $("compare-btn").onclick = runCompare;
@@ -583,7 +615,7 @@
       try {
         const res = JSON.parse(await file.text());
         if (!res.trace) throw new Error("this file has no animation trace; create one with: python -m elevsim run --trace out.json");
-        fillForm(res.config); $("preset").value = ""; updateScenarioNote();
+        fillForm(res.config); $("preset").value = ""; populateVariations(); updateScenarioNote();
         setResult(res); play();
         $("run-hint").textContent = `Loaded ${file.name}.`;
       } catch (e) {
