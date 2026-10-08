@@ -29,6 +29,7 @@ python3 -m elevsim viewer --out dist/viewer.html                 # build the vie
   hardcodes algorithm names. Use `/add-strategy` to add one.
 - Traffic that needs a scheduler (`office_day`) lives in `elevsim/schedule.py` and is selected through
   `SCHEDULED_TRAFFIC` in `elevsim/config.py`; energy models live in `elevsim/energy.py`. See `docs/code-map.md`.
+- Versions and the upgrade rules are in `docs/tech-stack.md`; update it in the same PR as any version change.
 - `dist/` and `results/` are generated and gitignored.
 
 ## Git
