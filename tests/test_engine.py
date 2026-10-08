@@ -1,18 +1,22 @@
 import unittest
 
 from elevsim import SimConfig, Simulation, compare, run
-from elevsim.config import TRAFFIC_PATTERNS
 from elevsim.model import Passenger
 from elevsim.passengers import generate_passengers
 from elevsim.strategies import STRATEGIES, get_strategy
 
+UP_PEAK = {"incoming": 0.85, "outgoing": 0.05, "interfloor": 0.10}
+DOWN_PEAK = {"incoming": 0.05, "outgoing": 0.85, "interfloor": 0.10}
+LUNCH = {"incoming": 0.15, "outgoing": 0.65, "interfloor": 0.20}
+INTERFLOOR = {"incoming": 0.05, "outgoing": 0.05, "interfloor": 0.90}
+
 SCENARIOS = [
     {},
-    {"floors": 15, "elevators": 4, "traffic": "up_peak", "arrival_rate": 30, "passengers": 250},
-    {"floors": 6, "elevators": 1, "capacity": 4, "traffic": "down_peak", "arrival_rate": 10},
+    {"floors": 15, "elevators": 4, "traffic": UP_PEAK, "arrival_rate": 30, "passengers": 250},
+    {"floors": 6, "elevators": 1, "capacity": 4, "traffic": DOWN_PEAK, "arrival_rate": 10},
     {"floors": 2, "elevators": 2, "passengers": 60},
-    {"traffic": "lunch", "idle_parking": "lobby", "dt": 0.25},
-    {"floors": 8, "lobby_floor": 3, "traffic": "interfloor", "capacity": 2, "arrival_rate": 15},
+    {"traffic": LUNCH, "idle_parking": "lobby", "dt": 0.25},
+    {"floors": 8, "lobby_floor": 3, "traffic": INTERFLOOR, "capacity": 2, "arrival_rate": 15},
 ]
 
 
@@ -72,7 +76,7 @@ class FairnessTests(unittest.TestCase):
 
 class TrafficTests(unittest.TestCase):
     def test_up_peak_mostly_from_lobby(self):
-        ps = generate_passengers(SimConfig(traffic="up_peak", passengers=2000))
+        ps = generate_passengers(SimConfig(traffic=UP_PEAK, passengers=2000))
         share = sum(p.origin == 0 for p in ps) / len(ps)
         self.assertGreater(share, 0.75)
 
@@ -80,9 +84,9 @@ class TrafficTests(unittest.TestCase):
         cfg = SimConfig(floors=4, origin_weights=[0, 0, 1, 0], passengers=50)
         self.assertTrue(all(p.origin == 2 for p in generate_passengers(cfg)))
 
-    def test_known_patterns_validate(self):
-        for name in TRAFFIC_PATTERNS:
-            SimConfig(traffic=name).validate()
+    def test_known_traffic_values_validate(self):
+        for traffic in ("uniform", UP_PEAK, DOWN_PEAK, LUNCH, INTERFLOOR):
+            SimConfig(traffic=traffic).validate()
         with self.assertRaises(ValueError):
             SimConfig(traffic="rush").validate()
 

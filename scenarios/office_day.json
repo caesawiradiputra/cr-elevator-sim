@@ -1,0 +1,37 @@
+{
+  "name": "Office full day",
+  "floors": 15, "elevators": 4, "capacity": 10,
+  "traffic": "office_day", "employees": 300,
+  "day_start": "06:45", "day_end": "20:00", "day_variation": 1.0,
+  "office": {
+    "arrival_window": ["07:00", "08:00"],
+    "arrival_peak": "07:50",
+    "late_share": 0.15,
+    "late_end": "09:30",
+    "lunch_center": "12:00",
+    "lunch_spread_min": 30,
+    "lunch_out_share": 0.40,
+    "lunch_cafe_share": 0.30,
+    "lunch_out_min": [30, 60],
+    "lunch_cafe_min": [15, 40],
+    "work_window": ["09:00", "17:00"],
+    "meetings_per_person": 1.0,
+    "breaks_per_person": 0.7,
+    "meeting_min": [30, 60],
+    "break_min": [10, 20],
+    "home_window": ["17:00", "17:45"],
+    "stay_late_share": 0.20,
+    "min_trip_gap_s": 600,
+    "drain_margin_s": 3600,
+    "day_spread": {"late_share": 0.05, "lunch_out_share": 0.10, "stay_late_share": 0.08, "peak_shift_s": 300}
+  },
+  "enabled_variations": ["standard"],
+  "default_variation": "standard",
+  "variations": [
+    {
+      "id": "standard",
+      "name": "Standard",
+      "description": "One whole office day for 300 employees, from 06:45 to about 20:00. People arrive from about 07:00 (some late), go to lunch around 12:00 (some leave the building, some only visit the cafeteria on the lobby floor), make meeting and break trips, and mostly go home from 17:00 (some stay late). Expect three peaks (morning, lunch, evening) with quiet stretches between. Energy is a comparative estimate. This scenario runs on the live engine only."
+    }
+  ]
+}

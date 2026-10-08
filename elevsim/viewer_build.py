@@ -11,22 +11,45 @@ import json
 from pathlib import Path
 
 from .api import compare, list_strategies, run
-from .config import SimConfig
+from .config import SimConfig, resolve_scenario, scenario_default_id, scenario_variations
 from .metrics import METRICS
 from .strategies import STRATEGIES
 
 ROOT = Path(__file__).resolve().parent.parent
 PYODIDE_CDN = "https://cdn.jsdelivr.net/npm/pyodide@0.26.4/"
 DEMO_PRESET = "office_lunch"
+NO_PRECOMPUTE = {"office_day"}  # a full day is too large to embed; it runs on the live engine
+
+
+def precompute_ids(presets: list[dict], demo_all: bool) -> list[str]:
+    """Preset ids whose runs and comparison are computed at build time."""
+    ids = [p["id"] for p in presets] if demo_all else [DEMO_PRESET]
+    return [i for i in ids if i not in NO_PRECOMPUTE]
 
 
 def _presets() -> list[dict]:
+    """One preset per scenario file. ``variations`` are the enabled versions with their full
+    settings; ``config`` is the default version's."""
     out = []
     for path in sorted((ROOT / "scenarios").glob("*.json")):
         data = json.loads(path.read_text())
-        name = data.pop("name", path.stem)
-        data.pop("description", None)
-        out.append({"id": path.stem, "name": name, "config": data})
+        variations = [
+            {
+                "id": v["id"],
+                "name": v["name"],
+                "description": v.get("description", ""),
+                "config": resolve_scenario(data, v["id"]),
+            }
+            for v in scenario_variations(data)
+        ]
+        out.append({
+            "id": path.stem,
+            "name": data.get("name", path.stem),
+            "description": data.get("description", ""),
+            "default_variation": scenario_default_id(data),
+            "variations": variations,
+            "config": resolve_scenario(data),
+        })
     return out
 
 
@@ -51,7 +74,7 @@ def build_data(demo: bool = True, pyodide_base: str = PYODIDE_CDN, demo_all: boo
         "demo": None,
     }
     if demo:
-        ids = [p["id"] for p in presets] if demo_all else [DEMO_PRESET]
+        ids = precompute_ids(presets, demo_all)
         scenarios = {}
         for p in presets:
             if p["id"] not in ids:

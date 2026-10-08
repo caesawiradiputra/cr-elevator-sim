@@ -18,11 +18,17 @@ python3 -m elevsim viewer --out dist/viewer.html                 # build the vie
 - **Standard library only** — no third-party runtime dependencies. The engine
   must stay importable under Pyodide and on Python 3.10, 3.12 and 3.13 (the CI matrix).
 - There is no `pyproject.toml`, ruff or mypy config; don't assume `uv run` tooling.
+- The editor runs Ruff anyway (UP and TRY rules; TRY003 is not enforced). Before finishing a change run
+  `uvx ruff check --no-cache --select UP,TRY --ignore TRY003 .` (a one-off, no dependency added). With
+  `from __future__ import annotations` do not quote annotations (UP037), and do not `raise ValueError`
+  after an `isinstance` check (TRY004): raise `ConfigError` (a `ValueError` subclass in `elevsim/config.py`).
 - Runs must stay deterministic and fair: passengers are generated from the seed
   only, never from the strategy, so every algorithm sees identical traffic
   (covered by `tests/test_engine.py`).
 - Strategies are registered in `elevsim/strategies/__init__.py`; nothing else
   hardcodes algorithm names. Use `/add-strategy` to add one.
+- Traffic that needs a scheduler (`office_day`) lives in `elevsim/schedule.py` and is selected through
+  `SCHEDULED_TRAFFIC` in `elevsim/config.py`; energy models live in `elevsim/energy.py`. See `docs/code-map.md`.
 - `dist/` and `results/` are generated and gitignored.
 
 ## Git

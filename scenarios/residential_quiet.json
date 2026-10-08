@@ -1,6 +1,14 @@
 {
   "name": "Residential, quiet",
-  "description": "Light uniform traffic; idle cars return to the lobby.",
   "floors": 10, "elevators": 2, "capacity": 6,
-  "passengers": 150, "arrival_rate": 4, "traffic": "uniform", "idle_parking": "lobby"
+  "passengers": 150, "arrival_rate": 4, "traffic": "uniform", "idle_parking": "lobby",
+  "enabled_variations": ["standard"],
+  "default_variation": "standard",
+  "variations": [
+    {
+      "id": "standard",
+      "name": "Standard",
+      "description": "A quiet apartment building: one person every 15 seconds on average, from any floor to any floor. Idle cars wait in the lobby. Waits stay short, so compare journey time and energy more than queues."
+    }
+  ]
 }

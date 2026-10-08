@@ -6,11 +6,13 @@
   const DATA = window.ELEVSIM || { sources: {}, presets: [], demo: null, strategies: [], metrics: {} };
   const $ = (id) => document.getElementById(id);
   const CFG_FIELDS = ["floors", "elevators", "capacity", "passengers", "arrival_rate", "seed", "traffic",
-    "idle_parking", "floor_travel_time", "door_time", "board_time", "lobby_floor"];
+    "idle_parking", "floor_travel_time", "door_time", "board_time", "lobby_floor", "employees"];
+  // A traffic mix is three relative weights, shown and edited as percentages.
+  const MIX_FIELDS = { incoming: "mix_incoming", outgoing: "mix_outgoing", interfloor: "mix_interfloor" };
   const NUMERIC = new Set(CFG_FIELDS.filter((f) => !["traffic", "idle_parking"].includes(f)));
   const DEFAULTS = Object.assign({
     floors: 10, elevators: 3, capacity: 8, passengers: 200, arrival_rate: 20, seed: 1, traffic: "uniform",
-    idle_parking: "stay", floor_travel_time: 1.5, door_time: 2, board_time: 1, lobby_floor: 0,
+    idle_parking: "stay", floor_travel_time: 1.5, door_time: 2, board_time: 1, lobby_floor: 0, employees: 300,
   }, DATA.defaults || {});
 
   let py = null;            // Pyodide functions once loaded
@@ -55,14 +57,43 @@
   }
 
   // ----------------------------------------------------------------- config
+  // office_day is sized by employees; passengers and arrivals/min do not apply to it.
+  function syncTrafficFields() {
+    const office = $("traffic").value === "office_day";
+    $("field-employees").hidden = !office;
+    $("field-mix").hidden = $("traffic").value !== "mix";
+    $("field-passengers").hidden = office;
+    $("field-arrival_rate").hidden = office;
+  }
+  // `traffic` is a name, or a mix object, which the form shows as the "mix" option plus its shares.
   function fillForm(cfg) {
-    for (const f of CFG_FIELDS) if (cfg[f] !== undefined && $(f)) $(f).value = cfg[f];
+    const isMix = typeof cfg.traffic === "object" && cfg.traffic !== null;
+    const shown = isMix ? Object.assign({}, cfg, { traffic: "mix" }) : cfg;
+    for (const f of CFG_FIELDS) if (shown[f] !== undefined && $(f)) $(f).value = shown[f];
+    if (isMix) {
+      const total = Object.values(cfg.traffic).reduce((a, b) => a + b, 0) || 1;
+      for (const [key, id] of Object.entries(MIX_FIELDS)) $(id).value = Math.round((1000 * (cfg.traffic[key] || 0)) / total) / 10;
+    }
+    syncTrafficFields();
   }
   function readForm() {
-    const cfg = {};
+    // Start from the selected preset's full config so keys that have no form field (for
+    // example the office settings) reach the engine, then let the form fields win.
+    const preset = currentPreset();
+    const variation = currentVariation();
+    const cfg = variation ? Object.assign({}, variation.config) : preset ? Object.assign({}, preset.config) : {};
     for (const f of CFG_FIELDS) {
       const v = $(f).value;
       cfg[f] = NUMERIC.has(f) ? Number(v) : v;
+    }
+    if (cfg.traffic === "office_day" && !cfg.office) {
+      // Custom settings carry no office block; take it from the shipped office-day scenario.
+      const source = DATA.presets.find((p) => p.config.traffic === "office_day" && p.config.office);
+      if (source) cfg.office = source.config.office;
+    }
+    if (cfg.traffic === "mix") {
+      cfg.traffic = {};
+      for (const [key, id] of Object.entries(MIX_FIELDS)) cfg.traffic[key] = Number($(id).value) / 100;
     }
     return cfg;
   }
@@ -70,8 +101,16 @@
     if (!(cfg.floors >= 2 && cfg.floors <= 40)) return "Floors must be between 2 and 40.";
     if (!(cfg.elevators >= 1 && cfg.elevators <= 8)) return "Elevators must be between 1 and 8.";
     if (!(cfg.capacity >= 1)) return "Car capacity must be at least 1.";
-    if (!(cfg.passengers >= 1 && cfg.passengers <= 3000)) return "Passengers must be between 1 and 3000.";
-    if (!(cfg.arrival_rate > 0)) return "Arrivals per minute must be above 0.";
+    if (typeof cfg.traffic === "object") {
+      const shares = Object.values(cfg.traffic);
+      if (!shares.every((x) => x >= 0) || !(shares.reduce((a, b) => a + b, 0) > 0)) return "Trip shares must be 0 or more and not all zero.";
+    }
+    if (cfg.traffic === "office_day") {
+      if (!(Number.isInteger(cfg.employees) && cfg.employees >= 1 && cfg.employees <= 600)) return "Employees must be a whole number between 1 and 600.";
+    } else {
+      if (!(cfg.passengers >= 1 && cfg.passengers <= 3000)) return "Passengers must be between 1 and 3000.";
+      if (!(cfg.arrival_rate > 0)) return "Arrivals per minute must be above 0.";
+    }
     if (!(cfg.lobby_floor >= 0 && cfg.lobby_floor < cfg.floors)) return "Lobby floor must be one of the building's floors (0 is the bottom).";
     return null;
   }
@@ -84,6 +123,8 @@
     preset.add(custom);
     (DATA.presets || []).forEach((p, i) => preset.add(new Option(p.name, String(i))));
     preset.value = keep || "";
+    populateVariations();
+    updateScenarioNote();
     const strat = $("strategy");
     strat.innerHTML = "";
     strategies.forEach((s) => strat.add(new Option(s.label, s.name)));
@@ -94,6 +135,37 @@
     for (const [k, m] of Object.entries(DATA.metrics)) metric.add(new Option(m.label, k));
     metric.value = "avg_journey";
   }
+  // How the selected scenario will run, in words; "Custom" means the fields are set by hand.
+  function currentPreset() {
+    return $("preset").value === "" ? null : DATA.presets[Number($("preset").value)] || null;
+  }
+  // The chosen version of the current scenario (every scenario file lists at least one).
+  function currentVariation() {
+    const p = currentPreset();
+    const v = $("variation").value;
+    return p && p.variations && p.variations.length && v !== "" ? p.variations[Number(v)] || null : null;
+  }
+  // Only the default version is precomputed, so any other one needs the live engine.
+  function isDefaultVariation() {
+    const v = currentVariation();
+    return !v || v.id === currentPreset().default_variation;
+  }
+  // The Variation dropdown lists the scenario's enabled versions and selects its default;
+  // it is hidden when there is only one, since there is nothing to choose.
+  function populateVariations() {
+    const p = currentPreset();
+    const variations = p && p.variations ? p.variations : [];
+    const sel = $("variation");
+    sel.innerHTML = "";
+    $("field-variation").hidden = variations.length < 2;
+    variations.forEach((v, i) => sel.add(new Option(v.name, String(i))));
+    if (variations.length) sel.value = String(Math.max(0, variations.findIndex((v) => v.id === p.default_variation)));
+  }
+  function updateScenarioNote() {
+    const p = currentPreset();
+    const v = currentVariation();
+    $("scenario-note").textContent = p ? (v ? v.description : p.description) || "" : "Custom: set the building and traffic yourself in the fields below.";
+  }
   function updateStrategyNote() {
     const s = strategies.find((x) => x.name === $("strategy").value);
     $("strategy-note").textContent = s ? s.description : "";
@@ -103,14 +175,16 @@
   // Precomputed scenario matching the form, for when the engine is unavailable.
   function demoForForm() {
     const p = DATA.presets[Number($("preset").value)];
-    if ($("preset").value === "" || !p || !DATA.demo) return null;
+    if ($("preset").value === "" || !p || !DATA.demo || !isDefaultVariation()) return null;
     return DATA.demo.scenarios[p.id] || null;
   }
   function selectPreset(id) {
     const i = (DATA.presets || []).findIndex((p) => p.id === id);
     if (i < 0) return;
     $("preset").value = String(i);
+    populateVariations();
     fillForm(Object.assign({}, DEFAULTS, DATA.presets[i].config));
+    updateScenarioNote();
   }
 
   async function runSimulation() {
@@ -363,7 +437,19 @@
   }
 
   // -------------------------------------------------------------- readouts
-  const fmtT = (s) => { s = Math.max(0, Math.round(s)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+  // office_day runs show the time of day (day_start + elapsed); other runs show elapsed m:ss.
+  const dayStartSeconds = (cfg) => {
+    const [h, m] = String(cfg.day_start || "00:00").split(":").map(Number);
+    return h * 3600 + m * 60;
+  };
+  const fmtT = (s) => {
+    s = Math.max(0, Math.round(s));
+    if (result && result.config.traffic === "office_day") {
+      const abs = s + dayStartSeconds(result.config);
+      return String(Math.floor(abs / 3600) % 24).padStart(2, "0") + ":" + String(Math.floor((abs % 3600) / 60)).padStart(2, "0");
+    }
+    return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0");
+  };
   const num = (v, d = 1) => (typeof v === "number" ? v.toFixed(d) : String(v));
 
   function renderLive() {
@@ -395,6 +481,7 @@
       ["Average journey", num(s.avg_journey) + " s"], ["Served", s.served], ["Utilization", num(s.utilization) + " %"],
       ["Idle time, all cars", num(s.idle_time, 0) + " s"], ["Floors travelled", s.floors_travelled], ["Stops", s.stops],
       ["Longest queue", s.max_queue], ["Bottleneck episodes", s.bottlenecks], ["Full-car pass-bys", s.left_behind],
+      ["Energy (est.)", s.energy_kwh === undefined ? "n/a" : num(s.energy_kwh, 2) + " kWh"],
     ];
     $("final").innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
   }
@@ -482,7 +569,7 @@
     }).join("");
 
     const cols = ["avg_wait", "p95_wait", "max_wait", "avg_travel", "avg_journey", "long_wait_pct", "utilization",
-      "idle_time", "floors_travelled", "stops", "max_queue", "bottlenecks", "left_behind"];
+      "idle_time", "floors_travelled", "energy_kwh", "stops", "max_queue", "bottlenecks", "left_behind"];
     const bestOf = {};
     for (const k of cols) {
       let b = null;
@@ -499,7 +586,7 @@
     const byMax = res.slice().sort((a, b) => a.metrics.max_wait.mean - b.metrics.max_wait.mean);
     const c = compareData.config;
     const gap = byJourney[byJourney.length - 1].metrics.avg_journey.mean - byJourney[0].metrics.avg_journey.mean;
-    $("verdict").innerHTML = `For ${c.floors} floors, ${c.elevators} car${c.elevators > 1 ? "s" : ""} and ${c.traffic.replace("_", "-")} traffic at ${c.arrival_rate}/min, ` +
+    $("verdict").innerHTML = `For ${c.floors} floors, ${c.elevators} car${c.elevators > 1 ? "s" : ""} and ${typeof c.traffic === "object" ? "lobby-mix" : c.traffic.replace("_", "-")} traffic ${c.traffic === "office_day" ? `with ${c.employees} employees` : `at ${c.arrival_rate}/min`}, ` +
       `<strong>${byJourney[0].label}</strong> gives the shortest average journey (${num(byJourney[0].metrics.avg_journey.mean)} s, ` +
       `${num(gap)} s faster than ${byJourney[byJourney.length - 1].label}). ` +
       (byMax[0].strategy === byJourney[0].strategy ? "It also has the lowest worst-case wait." :
@@ -523,10 +610,25 @@
     $("strategy").onchange = () => { updateStrategyNote(); if (!py) runSimulation(); };
     $("preset").onchange = () => {
       const p = DATA.presets[Number($("preset").value)];
+      populateVariations();
       if (p) fillForm(Object.assign({}, DEFAULTS, p.config));
+      updateScenarioNote();
       if (!py) { runSimulation(); runCompare(); }
     };
-    for (const f of CFG_FIELDS) if ($(f)) $(f).addEventListener("input", () => { if (document.activeElement === $(f)) $("preset").value = ""; });
+    for (const f of CFG_FIELDS) if ($(f)) $(f).addEventListener("input", () => { if (document.activeElement === $(f)) { $("preset").value = ""; populateVariations(); updateScenarioNote(); } });
+    for (const id of Object.values(MIX_FIELDS)) {
+      $(id).addEventListener("input", () => {
+        if (document.activeElement === $(id)) { $("preset").value = ""; populateVariations(); updateScenarioNote(); }
+      });
+    }
+    $("variation").onchange = () => {
+      const p = currentPreset();
+      const v = currentVariation();
+      if (p) fillForm(Object.assign({}, DEFAULTS, v ? v.config : p.config));
+      updateScenarioNote();
+      if (!py) { runSimulation(); runCompare(); }
+    };
+    $("traffic").addEventListener("change", syncTrafficFields);
     $("run-btn").onclick = runSimulation;
     $("compare-btn").onclick = runCompare;
     $("metric").onchange = renderCompare;
@@ -545,7 +647,7 @@
       try {
         const res = JSON.parse(await file.text());
         if (!res.trace) throw new Error("this file has no animation trace; create one with: python -m elevsim run --trace out.json");
-        fillForm(res.config); $("preset").value = "";
+        fillForm(res.config); $("preset").value = ""; populateVariations(); updateScenarioNote();
         setResult(res); play();
         $("run-hint").textContent = `Loaded ${file.name}.`;
       } catch (e) {

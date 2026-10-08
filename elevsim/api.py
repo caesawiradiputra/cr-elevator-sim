@@ -32,7 +32,7 @@ def run(cfg, strategy: str = "collective", record: bool = False, frame_interval:
     }
     if record:
         result["trace"] = {
-            "frame_interval": frame_interval,
+            "frame_interval": sim.frame_interval,
             # [t, [[position, state, direction, load], ...per car]]
             "frames": sim.frames,
             # [arrival, origin, dest, board, alight, car]

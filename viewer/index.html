@@ -21,20 +21,26 @@
       <h2>Building &amp; traffic</h2>
       <div class="form" id="config-form">
         <div class="field wide"><label for="preset">Scenario</label><select id="preset"></select></div>
+        <div class="field wide" id="field-variation" hidden><label for="variation">Variation</label><select id="variation"></select></div>
+        <p class="strategy-note scenario-note" id="scenario-note"></p>
         <div class="field"><label for="floors">Floors</label><input id="floors" type="number" min="2" max="40"></div>
         <div class="field"><label for="elevators">Elevators</label><input id="elevators" type="number" min="1" max="8"></div>
         <div class="field"><label for="capacity">Car capacity</label><input id="capacity" type="number" min="1" max="30"></div>
-        <div class="field"><label for="passengers">Passengers</label><input id="passengers" type="number" min="1" max="3000"></div>
-        <div class="field"><label for="arrival_rate">Arrivals / min</label><input id="arrival_rate" type="number" min="0.1" step="0.5"></div>
+        <div class="field" id="field-passengers"><label for="passengers">Passengers</label><input id="passengers" type="number" min="1" max="3000"></div>
+        <div class="field" id="field-arrival_rate"><label for="arrival_rate">Arrivals / min</label><input id="arrival_rate" type="number" min="0.1" step="0.5"></div>
+        <div class="field" id="field-employees" hidden><label for="employees">Employees</label><input id="employees" type="number" min="1" max="600"></div>
         <div class="field"><label for="seed">Seed</label><input id="seed" type="number" min="0"></div>
         <div class="field wide"><label for="traffic">Traffic pattern</label>
           <select id="traffic">
             <option value="uniform">Uniform (any floor to any floor)</option>
-            <option value="up_peak">Morning up-peak (from lobby)</option>
-            <option value="down_peak">Evening down-peak (to lobby)</option>
-            <option value="lunch">Lunch (to and from lobby)</option>
-            <option value="interfloor">Interfloor (between upper floors)</option>
+            <option value="mix">Mix of lobby trips (set the shares)</option>
+            <option value="office_day">Office full day (employees)</option>
           </select></div>
+        <div class="mix" id="field-mix" hidden>
+          <div class="field"><label for="mix_incoming">Up from lobby %</label><input id="mix_incoming" type="number" min="0" step="1"></div>
+          <div class="field"><label for="mix_outgoing">Down to lobby %</label><input id="mix_outgoing" type="number" min="0" step="1"></div>
+          <div class="field"><label for="mix_interfloor">Between floors %</label><input id="mix_interfloor" type="number" min="0" step="1"></div>
+        </div>
         <div class="field wide"><label for="idle_parking">Idle cars</label>
           <select id="idle_parking"><option value="stay">Wait where they stop</option><option value="lobby">Return to the lobby</option></select></div>
       </div>
@@ -71,6 +77,7 @@
         <select id="speed" aria-label="Playback speed">
           <option value="1">1×</option><option value="2">2×</option><option value="4">4×</option>
           <option value="8" selected>8×</option><option value="16">16×</option><option value="32">32×</option>
+          <option value="120">120×</option><option value="600">600×</option>
         </select>
       </div>
       <div class="panel">

@@ -8,39 +8,76 @@ import os
 import sys
 
 from .api import compare, list_strategies, run
-from .config import TRAFFIC_PATTERNS, SimConfig
+from .config import SCHEDULED_TRAFFIC, TRAFFIC_MIX_KEYS, SimConfig
 from .metrics import METRICS
 from .strategies import STRATEGIES
 
 TABLE_METRICS = ["avg_wait", "p95_wait", "max_wait", "avg_journey", "utilization", "floors_travelled",
-                 "max_queue", "bottlenecks", "left_behind"]
+                 "energy_kwh", "max_queue", "bottlenecks", "left_behind"]
 SHORT = {"avg_wait": "avg wait", "p95_wait": "p95 wait", "max_wait": "max wait", "avg_journey": "journey",
-         "utilization": "util %", "floors_travelled": "floors", "max_queue": "max q",
+         "utilization": "util %", "floors_travelled": "floors", "energy_kwh": "kWh", "max_queue": "max q",
          "bottlenecks": "bottlenk", "left_behind": "full pass"}
 
 
 def _add_config_args(p: argparse.ArgumentParser) -> None:
     g = p.add_argument_group("scenario (overrides --config)")
     g.add_argument("--config", help="JSON scenario file (see scenarios/)")
+    g.add_argument("--variation", help="version of the scenario file to run (default: its default_variation)")
     g.add_argument("--floors", type=int)
     g.add_argument("--elevators", type=int)
     g.add_argument("--capacity", type=int)
-    g.add_argument("--passengers", type=int)
+    g.add_argument("--passengers", type=int, help="total passengers (not used by office_day)")
+    g.add_argument("--employees", type=int, help="headcount for --traffic office_day")
     g.add_argument("--rate", dest="arrival_rate", type=float, help="arrivals per minute")
-    g.add_argument("--traffic", choices=sorted(TRAFFIC_PATTERNS))
+    g.add_argument("--traffic", choices=["uniform", *SCHEDULED_TRAFFIC])
+    g.add_argument("--mix", help="traffic mix as three weights: trips up from the lobby, down to the lobby, between floors (for example 0.15,0.65,0.20)")
     g.add_argument("--parking", dest="idle_parking", choices=["stay", "lobby"])
     g.add_argument("--seed", type=int)
 
 
 def _config_from_args(args) -> SimConfig:
     data = {}
+    if args.variation and not args.config:
+        raise ValueError("--variation needs --config (a scenario file that lists variations)")
     if args.config:
-        data = SimConfig.from_file(args.config).to_dict()
-    for key in ("floors", "elevators", "capacity", "passengers", "arrival_rate", "traffic", "idle_parking", "seed"):
+        data = SimConfig.from_file(args.config, variation=args.variation).to_dict()
+    for key in ("floors", "elevators", "capacity", "passengers", "employees", "arrival_rate", "traffic",
+                "idle_parking", "seed"):
         val = getattr(args, key)
         if val is not None:
             data[key] = val
+    if args.mix is not None:
+        if args.traffic is not None:
+            raise ValueError("use either --traffic or --mix, not both")
+        data["traffic"] = _parse_mix(args.mix)
+    if args.passengers is not None and data.get("traffic") == "office_day":
+        raise ValueError("--passengers does not apply to office_day traffic; use --employees")
     return SimConfig.from_dict(data)
+
+
+def _parse_mix(text: str) -> dict:
+    try:
+        weights = [float(part) for part in text.split(",")]
+    except ValueError:
+        weights = []
+    if len(weights) != len(TRAFFIC_MIX_KEYS):
+        raise ValueError("--mix needs three numbers: trips up from the lobby, down to the lobby, between floors "
+                         "(for example 0.15,0.65,0.20)")
+    return dict(zip(TRAFFIC_MIX_KEYS, weights))
+
+
+def _traffic_label(traffic) -> str:
+    if isinstance(traffic, dict):
+        total = sum(traffic.values()) or 1.0
+        shares = "/".join(str(round(100 * traffic.get(k, 0.0) / total)) for k in TRAFFIC_MIX_KEYS)
+        return f"mix {shares} up/down/between %"
+    return str(traffic)
+
+
+def _traffic_text(cfg: SimConfig, trips: int) -> str:
+    if cfg.traffic == "office_day":
+        return f"office_day, {cfg.employees} employees, {trips} trips, seed {cfg.seed}"
+    return f"{trips} passengers ({_traffic_label(cfg.traffic)}, {cfg.arrival_rate}/min, seed {cfg.seed})"
 
 
 def _fmt(v) -> str:
@@ -65,7 +102,7 @@ def cmd_run(args) -> None:
     res = run(cfg, args.strategy, record=bool(args.trace))
     s = res["summary"]
     print(f"{res['strategy_label']} on {cfg.floors} floors, {cfg.elevators} cars, "
-          f"{cfg.passengers} passengers ({cfg.traffic}, {cfg.arrival_rate}/min, seed {cfg.seed})\n")
+          f"{_traffic_text(cfg, s['passengers_total'])}\n")
     for key, (label, unit, _) in METRICS.items():
         print(f"  {label:32} {_fmt(s[key]):>10} {unit}")
     if args.trace:
@@ -78,8 +115,13 @@ def cmd_compare(args) -> None:
     cfg = _config_from_args(args)
     strategies = args.strategies.split(",") if args.strategies else None
     out = compare(cfg, strategies, args.seeds)
-    print(f"{cfg.floors} floors, {cfg.elevators} cars x {cfg.capacity}, {cfg.passengers} passengers, "
-          f"traffic={cfg.traffic}, {cfg.arrival_rate}/min, parking={cfg.idle_parking}, "
+    totals = sorted({r["passengers_total"] for r in out["results"][0]["runs"]})
+    trips = str(totals[0]) if len(totals) == 1 else f"{totals[0]}-{totals[-1]}"
+    if cfg.traffic == "office_day":
+        load = f"{cfg.employees} employees ({trips} trips), traffic=office_day"
+    else:
+        load = f"{trips} passengers, traffic={_traffic_label(cfg.traffic)}, {cfg.arrival_rate}/min"
+    print(f"{cfg.floors} floors, {cfg.elevators} cars x {cfg.capacity}, {load}, parking={cfg.idle_parking}, "
           f"seeds {out['seeds'][0]}..{out['seeds'][-1]} (mean over {len(out['seeds'])} runs)\n")
     ranked = sorted(out["results"], key=lambda r: r["metrics"][args.rank_by]["mean"],
                     reverse=METRICS[args.rank_by][2] is False)

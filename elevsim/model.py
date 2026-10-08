@@ -54,6 +54,7 @@ class Elevator:
     time_in_state: dict = field(default_factory=lambda: {s: 0.0 for s in STATE_CODES})
     load_time: float = 0.0  # integral of load over time (passenger-seconds)
     floors_travelled: int = 0
+    loaded_floor_distance: int = 0  # passengers on board, summed over every floor transition
     stops: int = 0
     reversals: int = 0
     served: int = 0

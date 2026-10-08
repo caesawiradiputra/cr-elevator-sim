@@ -1,6 +1,14 @@
 {
   "name": "Office evening rush",
-  "description": "Most people leave upper floors for the lobby.",
   "floors": 15, "elevators": 4, "capacity": 10,
-  "passengers": 400, "arrival_rate": 30, "traffic": "down_peak"
+  "passengers": 400, "arrival_rate": 30, "traffic": {"incoming": 0.05, "outgoing": 0.85, "interfloor": 0.10},
+  "enabled_variations": ["standard"],
+  "default_variation": "standard",
+  "variations": [
+    {
+      "id": "standard",
+      "name": "Standard",
+      "description": "An evening rush: about one person every 2 seconds, and almost all (85%) leave an upper floor for the lobby. Cars fill on the way down, so waiting builds on the upper floors and full cars may pass people by. Watch full-car pass-bys and the longest waits."
+    }
+  ]
 }

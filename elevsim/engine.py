@@ -15,9 +15,10 @@ direction board one at a time until the car is full.
 """
 from __future__ import annotations
 
+import math
 from collections import deque
 
-from .config import SimConfig
+from .config import DEFAULT_MAX_TIME, SimConfig
 from .model import (
     CLOSING, DOWN, IDLE, LOADING, MOVING, NONE, OPENING, STATE_CODES, UP,
     Elevator, HallCall, Passenger,
@@ -25,6 +26,7 @@ from .model import (
 from .passengers import generate_passengers
 
 EPS = 1e-9
+MAX_FRAMES = 10_000  # most frames a recorded office_day run may hold
 
 
 class Simulation:
@@ -32,6 +34,7 @@ class Simulation:
         self.cfg = cfg.validate()
         self.strategy = strategy
         self.passengers = passengers if passengers is not None else generate_passengers(cfg)
+        self.horizon = self._resolve_horizon()
         self._pending = deque(sorted(self.passengers, key=lambda p: p.arrival))
         self.queues: dict[tuple[int, int], deque[Passenger]] = {
             (f, d): deque() for f in range(cfg.floors) for d in (UP, DOWN)
@@ -55,6 +58,7 @@ class Simulation:
         # animation
         self.frames: list | None = None
         self._frame_every = 1
+        self.frame_interval: float | None = None  # effective seconds between frames, set by run(record=True)
         self._tick = 0
 
         strategy.setup(self)
@@ -70,17 +74,53 @@ class Simulation:
     def finished(self) -> bool:
         return not self._pending and self.delivered == len(self.passengers)
 
+    def _resolve_horizon(self) -> float:
+        """Stop time in seconds: an explicit max_time, else 4 hours (office_day: last request + margin).
+
+        Resolved here, from the passengers actually given, because every path (CLI, compare, viewer,
+        tests) goes through Simulation; the config is never changed, so a copy made for another seed
+        resolves its own horizon.
+        """
+        cfg = self.cfg
+        if cfg.traffic != "office_day":
+            return DEFAULT_MAX_TIME if cfg.max_time is None else cfg.max_time
+        last = max((p.arrival for p in self.passengers), default=0.0)
+        needed = last + float(cfg.office_settings()["drain_margin_s"])
+        if cfg.max_time is None:
+            return needed
+        if cfg.max_time < needed:
+            raise ValueError(
+                f"max_time {cfg.max_time:g} s is shorter than the {needed:g} s this office_day needs "
+                f"(last request at {last:g} s plus a {needed - last:g} s margin)"
+            )
+        return cfg.max_time
+
     # --------------------------------------------------------------------- run
-    def run(self, record: bool = False, frame_interval: float = 0.5) -> "Simulation":
+    def run(self, record: bool = False, frame_interval: float = 0.5) -> Simulation:
         if record:
             self.frames = []
-            self._frame_every = max(1, round(frame_interval / self.cfg.dt))
+            self._frame_every = self._frames_every(frame_interval)
+            self.frame_interval = self._frame_every * self.cfg.dt
             self._record_frame()
-        while not self.finished() and self.t < self.cfg.max_time - EPS:
+        while not self.finished() and self.t < self.horizon - EPS:
             self.step()
         if record and (self._tick % self._frame_every):
             self._record_frame()
         return self
+
+    def _frames_every(self, requested: float) -> int:
+        """Ticks between recorded frames.
+
+        The requested interval, widened for office_day so a run records at most MAX_FRAMES
+        frames. 9997 = MAX_FRAMES minus the initial frame, the final frame and one tick of
+        slack. Existing traffic is never widened: with the 4-hour default horizon the cap
+        would change every existing scenario's frames.
+        """
+        dt = self.cfg.dt
+        every = max(1, round(requested / dt))
+        if self.cfg.traffic == "office_day":
+            every = max(every, math.ceil(self.horizon / (MAX_FRAMES - 3) / dt - 1e-9))
+        return every
 
     def step(self) -> None:
         dt = self.cfg.dt
@@ -115,6 +155,7 @@ class Simulation:
             if e.timer <= EPS:
                 e.floor += e.direction
                 e.floors_travelled += 1
+                e.loaded_floor_distance += e.load  # load only changes while stopped
                 self._arrive(e)
         elif e.state == OPENING:
             e.timer -= dt

@@ -7,8 +7,9 @@ from __future__ import annotations
 
 import random
 
-from .config import TRAFFIC_PATTERNS, SimConfig
+from .config import SimConfig
 from .model import Passenger
+from .schedule import office_day_passengers
 
 
 def _weighted_floor(rng: random.Random, weights: list[float], exclude: int | None = None) -> int:
@@ -27,7 +28,7 @@ def _pick_trip(rng: random.Random, cfg: SimConfig) -> tuple[int, int]:
         dest = _weighted_floor(rng, cfg.destination_weights or uniform, exclude=origin)
         return origin, dest
 
-    mix = TRAFFIC_PATTERNS[cfg.traffic] if isinstance(cfg.traffic, str) else cfg.traffic
+    mix = None if cfg.traffic == "uniform" else cfg.traffic  # None: any floor to any floor
     if mix is None:
         origin = rng.randrange(n)
         dest = _weighted_floor(rng, uniform, exclude=origin)
@@ -48,6 +49,8 @@ def _pick_trip(rng: random.Random, cfg: SimConfig) -> tuple[int, int]:
 
 
 def generate_passengers(cfg: SimConfig) -> list[Passenger]:
+    if cfg.traffic == "office_day":  # built by a scheduler; cfg.passengers does not apply
+        return office_day_passengers(cfg)
     rng = random.Random(cfg.seed)
     mean_gap = 60.0 / cfg.arrival_rate
     t = 0.0
