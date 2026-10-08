@@ -7,6 +7,9 @@ picked up, it gets its own brainstorming and spec under `docs/superpowers/specs/
 and gets a version at release time (see `CHANGELOG.md`). Mark it `[x]` when it
 ships, and add the version and date.
 
+When adding an idea, check it against the others for conflicts and for ways to combine
+(see "Conflicts and combinations" at the end), and update that section.
+
 Add new ideas at the top of their group. One line is enough. Add a source date
 so the thought can be traced back to a conversation.
 
@@ -175,3 +178,43 @@ tests and the CI smoke commands before and after.
 - [ ] Employee-aware behavior, for example skipping the cafeteria when the queue
   is long. Rejected for now: it makes traffic depend on the strategy and breaks
   the "every algorithm sees identical traffic" rule. (2026-10-08)
+
+## Conflicts and combinations
+
+Checked on 2026-10-08. Update this section whenever an idea is added.
+
+Could be built together:
+
+- **Interactive run:** real-time decisions, events in the middle of a run, the game, and the
+  stepping interface they all need (advance N ticks, read the state, apply a decision). Build the
+  stepping API once. Events must be told to strategies as "a car is out of service".
+- **Office calendar:** night groups, the 24-hour window, multi-day weeks and attendance states
+  (sick, half day, holiday). Same scheduler, same employees across days; idle fast-forward becomes
+  necessary, and the fuller energy model (standby power) only matters once nights exist.
+- **Building topology:** multi-entry floors (basement car park), cars that do not serve every
+  floor, and serial banks with a sky lobby. One change to where trips start and end and which
+  floors a car reaches.
+- **Cooperative cars:** the direction preference, the restricted view that hides passenger
+  counts, and strategy options in the viewer belong in one strategy brainstorm.
+- **Backend:** hosting, database, sign-in, leaderboard verification and the "server engine"
+  option of the platform direction are one design, not four.
+- **Maintenance block:** the tech-stack decisions, typed models, the documentation session and
+  the walkthrough habit.
+
+Conflicts to watch:
+
+- **Viewer work vs the planned UI replacement:** smooth animation, view scale and scenario-note
+  polish are in `viewer/app.js`, which the platform direction says will be replaced. Prefer
+  logic that lives in the engine or the trace (for example a finer trace, or per-car timelines)
+  over viewer-only code, or keep viewer work small.
+- **Hosting vs the platform direction:** "a static site is enough" only holds while the engine
+  runs in the browser.
+- **Transfers vs fair traffic:** a passenger who changes elevators makes the second leg depend on
+  the first, against "identical traffic for every algorithm". Needs a chained passenger in the
+  engine, not a second generated trip.
+- **Fast-forward vs real-time control:** jumping over idle ticks conflicts with stepping one tick
+  at a time; a jump must stop at the next scheduled event or user action.
+- **pandas and databases vs standard library only:** keep them on the analysis side, with
+  `sqlite3` as the dependency-free start.
+- **Employee-aware behavior (rejected) vs events:** events from the seed are fine (everyone sees
+  the same ones); people reacting to queues is what breaks fairness.
