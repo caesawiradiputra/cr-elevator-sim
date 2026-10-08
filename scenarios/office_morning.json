@@ -1,6 +1,14 @@
 {
   "name": "Office morning rush",
-  "description": "A morning rush: about one person every 2 seconds shows up, and nearly all of them (85%) start at the lobby and go up. Queues build in the lobby, so this tests how quickly cars return to the lobby and how evenly they share the load. Watch the lobby queue and how often cars leave full.",
   "floors": 15, "elevators": 4, "capacity": 10,
-  "passengers": 400, "arrival_rate": 30, "traffic": "up_peak"
+  "passengers": 400, "arrival_rate": 30, "traffic": "up_peak",
+  "enabled_variations": ["standard"],
+  "default_variation": "standard",
+  "variations": [
+    {
+      "id": "standard",
+      "name": "Standard",
+      "description": "A morning rush: about one person every 2 seconds shows up, and nearly all of them (85%) start at the lobby and go up. Queues build in the lobby, so this tests how quickly cars return to the lobby and how evenly they share the load. Watch the lobby queue and how often cars leave full."
+    }
+  ]
 }

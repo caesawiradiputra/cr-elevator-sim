@@ -1,6 +1,14 @@
 {
   "name": "Small building, one car",
-  "description": "A small building with one car and steady traffic: about one person every 10 seconds, from any floor to any floor. With one car there is no choice of which car answers, so algorithms differ only in how the car orders its stops.",
   "floors": 6, "elevators": 1, "capacity": 6,
-  "passengers": 150, "arrival_rate": 6, "traffic": "uniform"
+  "passengers": 150, "arrival_rate": 6, "traffic": "uniform",
+  "enabled_variations": ["standard"],
+  "default_variation": "standard",
+  "variations": [
+    {
+      "id": "standard",
+      "name": "Standard",
+      "description": "A small building with one car and steady traffic: about one person every 10 seconds, from any floor to any floor. With one car there is no choice of which car answers, so algorithms differ only in how the car orders its stops."
+    }
+  ]
 }

@@ -30,9 +30,11 @@ open trace files written by `run --trace`.
 ## Configuration
 
 Any option can come from a scenario file (`scenarios/*.json`) and be
-overridden on the command line. A scenario file may also list `variations`
-(a `name`, a `description` and the settings they override); the viewer shows them
-in a Variation dropdown, and the engine and CLI ignore them.
+overridden on the command line. A scenario file keeps the settings shared by every version at the top
+level and lists its versions in `variations` (each has an `id`, a `name`, a `description`
+and the settings it sets on top). `enabled_variations` lists the ids the viewer offers in
+its Variation dropdown, and `default_variation` is the one selected first and the one the
+CLI runs; pick another with `--variation ID`. A file without `variations` is one version.
 
 | Key | Default | Meaning |
 | --- | --- | --- |

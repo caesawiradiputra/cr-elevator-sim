@@ -36,8 +36,10 @@ when `dev` is promoted. Each entry links to its design spec when there is one.
   in the summary.
 - Summary keys `passengers_total` and `horizon`; CLI `--employees` and a kWh column in the compare table.
 - Viewer: the office scenario (live engine only), an HH:MM clock, energy rows, 120x and 600x speeds.
-- Viewer: a short explanation of how each scenario will run, under the Scenario dropdown, and a
-  Variation dropdown for scenarios whose file lists `variations` (Office lunch has a balanced one).
+- Scenario files list their versions in `variations`, with `enabled_variations` and `default_variation`;
+  every shipped scenario has been converted, and Office lunch has two (a down rush and a balanced one).
+- Viewer: a short explanation of how each version of a scenario will run, under the Scenario dropdown,
+  and a Variation dropdown for scenarios with more than one enabled version. CLI: `--variation ID`.
 - `docs/code-map.md`, `docs/ideas.md` and the design spec and plan under `docs/superpowers/`.
 
 ### Changed

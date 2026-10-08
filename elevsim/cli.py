@@ -22,6 +22,7 @@ SHORT = {"avg_wait": "avg wait", "p95_wait": "p95 wait", "max_wait": "max wait",
 def _add_config_args(p: argparse.ArgumentParser) -> None:
     g = p.add_argument_group("scenario (overrides --config)")
     g.add_argument("--config", help="JSON scenario file (see scenarios/)")
+    g.add_argument("--variation", help="version of the scenario file to run (default: its default_variation)")
     g.add_argument("--floors", type=int)
     g.add_argument("--elevators", type=int)
     g.add_argument("--capacity", type=int)
@@ -35,8 +36,10 @@ def _add_config_args(p: argparse.ArgumentParser) -> None:
 
 def _config_from_args(args) -> SimConfig:
     data = {}
+    if args.variation and not args.config:
+        raise ValueError("--variation needs --config (a scenario file that lists variations)")
     if args.config:
-        data = SimConfig.from_file(args.config).to_dict()
+        data = SimConfig.from_file(args.config, variation=args.variation).to_dict()
     for key in ("floors", "elevators", "capacity", "passengers", "employees", "arrival_rate", "traffic",
                 "idle_parking", "seed"):
         val = getattr(args, key)

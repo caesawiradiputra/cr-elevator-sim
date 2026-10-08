@@ -62,6 +62,76 @@ def parse_hhmm(text: str) -> int:
     return h * 3600 + m * 60
 
 
+# Scenario files (scenarios/*.json): the settings shared by every version sit at the top level,
+# and `variations` lists the versions (each has an `id`, a `name`, a `description` and the settings
+# it sets on top). `enabled_variations` are the ids the viewer offers; `default_variation` is the
+# one used when none is asked for. Files without `variations` are one implicit version.
+SCENARIO_META_KEYS = ("name", "description", "variations", "enabled_variations", "default_variation")
+VARIATION_META_KEYS = ("id", "name", "description")
+
+
+def _variations_by_id(data: dict) -> dict:
+    by_id: dict = {}
+    for variation in data.get("variations") or []:
+        vid = variation.get("id") if isinstance(variation, dict) else None
+        if not isinstance(vid, str) or not vid:
+            raise ValueError("every variation needs a non-empty string id")
+        if vid in by_id:
+            raise ValueError(f"duplicate variation id {vid!r}")
+        by_id[vid] = variation
+    if not by_id:
+        for key in ("enabled_variations", "default_variation"):
+            if key in data:
+                raise ValueError(f"{key} needs a variations list")
+    return by_id
+
+
+def _enabled_ids(data: dict, by_id: dict) -> list[str]:
+    enabled = list(data.get("enabled_variations", by_id))
+    unknown = [i for i in enabled if i not in by_id]
+    if unknown:
+        raise ValueError(f"enabled_variations names unknown variations: {unknown}")
+    if by_id and not enabled:
+        raise ValueError("enabled_variations must not be empty")
+    return enabled
+
+
+def scenario_default_id(data: dict) -> str | None:
+    """The variation used when none is asked for: default_variation, else the first enabled one."""
+    by_id = _variations_by_id(data)
+    if not by_id:
+        return None
+    enabled = _enabled_ids(data, by_id)
+    default = data.get("default_variation", enabled[0])
+    if default not in enabled:
+        raise ValueError(f"default_variation {default!r} must be one of enabled_variations {enabled}")
+    return default
+
+
+def scenario_variations(data: dict) -> list[dict]:
+    """The enabled variations, in the order of enabled_variations."""
+    by_id = _variations_by_id(data)
+    return [by_id[i] for i in _enabled_ids(data, by_id)]
+
+
+def resolve_scenario(data: dict, variation: str | None = None) -> dict:
+    """Engine settings of a scenario file: the root settings with one variation on top.
+
+    ``variation`` is a variation id; any defined id may be asked for, enabled or not.
+    """
+    by_id = _variations_by_id(data)
+    default = scenario_default_id(data)  # also validates enabled_variations and default_variation
+    root = {k: v for k, v in data.items() if k not in SCENARIO_META_KEYS}
+    if not by_id:
+        if variation is not None:
+            raise ValueError(f"this scenario has no variations (asked for {variation!r})")
+        return root
+    chosen = default if variation is None else variation
+    if chosen not in by_id:
+        raise ValueError(f"unknown variation {chosen!r}; choose from {sorted(by_id)}")
+    return {**root, **{k: v for k, v in by_id[chosen].items() if k not in VARIATION_META_KEYS}}
+
+
 @dataclass
 class SimConfig:
     # Building
@@ -233,10 +303,7 @@ class SimConfig:
         return cls(**data).validate()
 
     @classmethod
-    def from_file(cls, path: str) -> "SimConfig":
+    def from_file(cls, path: str, variation: str | None = None) -> "SimConfig":
         with open(path) as fh:
             data = json.load(fh)
-        data.pop("name", None)
-        data.pop("description", None)
-        data.pop("variations", None)  # viewer-only: named variations of this scenario
-        return cls.from_dict(data)
+        return cls.from_dict(resolve_scenario(data, variation))

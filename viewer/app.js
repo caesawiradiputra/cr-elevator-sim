@@ -116,23 +116,27 @@
   function currentPreset() {
     return $("preset").value === "" ? null : DATA.presets[Number($("preset").value)] || null;
   }
-  // The chosen variation of the current scenario, or null for the default version.
+  // The chosen version of the current scenario (every scenario file lists at least one).
   function currentVariation() {
     const p = currentPreset();
     const v = $("variation").value;
-    return p && p.variations && v !== "" ? p.variations[Number(v)] || null : null;
+    return p && p.variations && p.variations.length && v !== "" ? p.variations[Number(v)] || null : null;
   }
-  // The Variation dropdown exists only for scenarios whose file lists variations.
+  // Only the default version is precomputed, so any other one needs the live engine.
+  function isDefaultVariation() {
+    const v = currentVariation();
+    return !v || v.id === currentPreset().default_variation;
+  }
+  // The Variation dropdown lists the scenario's enabled versions and selects its default;
+  // it is hidden when there is only one, since there is nothing to choose.
   function populateVariations() {
     const p = currentPreset();
     const variations = p && p.variations ? p.variations : [];
     const sel = $("variation");
     sel.innerHTML = "";
-    $("field-variation").hidden = variations.length === 0;
-    if (!variations.length) return;
-    sel.add(new Option("Default", ""));
+    $("field-variation").hidden = variations.length < 2;
     variations.forEach((v, i) => sel.add(new Option(v.name, String(i))));
-    sel.value = "";
+    if (variations.length) sel.value = String(Math.max(0, variations.findIndex((v) => v.id === p.default_variation)));
   }
   function updateScenarioNote() {
     const p = currentPreset();
@@ -148,7 +152,7 @@
   // Precomputed scenario matching the form, for when the engine is unavailable.
   function demoForForm() {
     const p = DATA.presets[Number($("preset").value)];
-    if ($("preset").value === "" || !p || !DATA.demo || currentVariation()) return null;
+    if ($("preset").value === "" || !p || !DATA.demo || !isDefaultVariation()) return null;
     return DATA.demo.scenarios[p.id] || null;
   }
   function selectPreset(id) {

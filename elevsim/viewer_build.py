@@ -11,7 +11,7 @@ import json
 from pathlib import Path
 
 from .api import compare, list_strategies, run
-from .config import SimConfig
+from .config import SimConfig, resolve_scenario, scenario_default_id, scenario_variations
 from .metrics import METRICS
 from .strategies import STRATEGIES
 
@@ -28,20 +28,28 @@ def precompute_ids(presets: list[dict], demo_all: bool) -> list[str]:
 
 
 def _presets() -> list[dict]:
+    """One preset per scenario file. ``variations`` are the enabled versions with their full
+    settings; ``config`` is the default version's."""
     out = []
     for path in sorted((ROOT / "scenarios").glob("*.json")):
         data = json.loads(path.read_text())
-        name = data.pop("name", path.stem)
-        description = data.pop("description", "")  # shown under the scenario dropdown, not sent to the engine
         variations = [
             {
+                "id": v["id"],
                 "name": v["name"],
                 "description": v.get("description", ""),
-                "config": {**data, **{k: val for k, val in v.items() if k not in ("name", "description")}},
+                "config": resolve_scenario(data, v["id"]),
             }
-            for v in data.pop("variations", [])
+            for v in scenario_variations(data)
         ]
-        out.append({"id": path.stem, "name": name, "description": description, "variations": variations, "config": data})
+        out.append({
+            "id": path.stem,
+            "name": data.get("name", path.stem),
+            "description": data.get("description", ""),
+            "default_variation": scenario_default_id(data),
+            "variations": variations,
+            "config": resolve_scenario(data),
+        })
     return out
 
 

@@ -12,12 +12,13 @@ class ViewerBuildTests(unittest.TestCase):
         self.assertEqual(presets["office_day"]["config"]["traffic"], "office_day")
         json.dumps(presets["office_day"])
 
-    def test_every_preset_explains_how_it_runs(self):
+    def test_every_version_explains_how_it_runs(self):
         for preset in _presets():
-            with self.subTest(preset=preset["id"]):
-                # an explanation of how the scenario plays out, not a short label
-                self.assertGreaterEqual(len(preset.get("description", "")), 80)
-                self.assertNotIn("description", preset["config"])
+            for variation in preset["variations"]:
+                with self.subTest(preset=preset["id"], variation=variation["id"]):
+                    # an explanation of how the scenario plays out, not a short label
+                    self.assertGreaterEqual(len(variation["description"]), 80)
+                    self.assertNotIn("description", variation["config"])
 
     def test_office_day_is_never_precomputed(self):
         presets = _presets()

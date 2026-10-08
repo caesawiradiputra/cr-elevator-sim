@@ -34,7 +34,7 @@ config (JSON scenario / CLI flags / viewer form)
 | `elevsim/cli.py` | `python -m elevsim run / compare / list / viewer` | flags, printed tables (`TABLE_METRICS`, `SHORT`) |
 | `elevsim/viewer_build.py` | builds `dist/viewer.html`: bundles the viewer files, the Python sources and the precomputed demo | which scenarios are precomputed (`DEMO_PRESET`, `NO_PRECOMPUTE`) |
 | `viewer/index.html`, `app.js`, `style.css` | the single-page viewer | form fields, readouts (`renderFinal`), Compare table (`cols`), clock (`fmtT`), playback |
-| `scenarios/*.json` | named scenario presets: the viewer's dropdown, and its `description` is the note shown under it | add a preset, add a `variations` entry, or reword how a scenario is explained |
+| `scenarios/*.json` | named scenario presets: the viewer's dropdown, and its `description` is the note shown under it | add a scenario, add or switch off a version (`variations`, `enabled_variations`, `default_variation`), or reword how it is explained; the merge rule is `resolve_scenario` in `config.py` |
 | `tests/` | `unittest` suites; run `python3 -m unittest discover -s tests -t .` | one file per area: engine, energy, office config, office day, CLI, viewer build |
 
 ## If you want to change...

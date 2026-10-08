@@ -1,6 +1,14 @@
 {
   "name": "Office full day",
-  "description": "One whole office day for 300 employees, from 06:45 to about 20:00. People arrive from about 07:00 (some late), go to lunch around 12:00 (some leave the building, some only visit the cafeteria on the lobby floor), make meeting and break trips, and mostly go home from 17:00 (some stay late). Expect three peaks (morning, lunch, evening) with quiet stretches between. Energy is a comparative estimate. This scenario runs on the live engine only.",
   "floors": 15, "elevators": 4, "capacity": 10,
-  "traffic": "office_day", "employees": 300
+  "traffic": "office_day", "employees": 300,
+  "enabled_variations": ["standard"],
+  "default_variation": "standard",
+  "variations": [
+    {
+      "id": "standard",
+      "name": "Standard",
+      "description": "One whole office day for 300 employees, from 06:45 to about 20:00. People arrive from about 07:00 (some late), go to lunch around 12:00 (some leave the building, some only visit the cafeteria on the lobby floor), make meeting and break trips, and mostly go home from 17:00 (some stay late). Expect three peaks (morning, lunch, evening) with quiet stretches between. Energy is a comparative estimate. This scenario runs on the live engine only."
+    }
+  ]
 }
