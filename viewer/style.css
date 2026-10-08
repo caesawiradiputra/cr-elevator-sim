@@ -176,3 +176,4 @@ td .sd { color: var(--muted); font-size: 12px; }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
 
 .field[hidden] { display: none; }
+.scenario-note { grid-column: 1 / -1; margin: 0; }

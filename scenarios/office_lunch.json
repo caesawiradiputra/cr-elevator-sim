@@ -1,6 +1,6 @@
 {
   "name": "Office lunch",
-  "description": "Two-way traffic to and from the lobby plus some interfloor trips.",
+  "description": "Lunch hour: about one person every 2.4 seconds. 40% go from the lobby up, 40% from upper floors down, and 20% between upper floors, so cars are busy in both directions at once. This favors algorithms that handle both directions well.",
   "floors": 15, "elevators": 4, "capacity": 10,
   "passengers": 400, "arrival_rate": 25, "traffic": "lunch"
 }

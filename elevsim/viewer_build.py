@@ -32,8 +32,8 @@ def _presets() -> list[dict]:
     for path in sorted((ROOT / "scenarios").glob("*.json")):
         data = json.loads(path.read_text())
         name = data.pop("name", path.stem)
-        data.pop("description", None)
-        out.append({"id": path.stem, "name": name, "config": data})
+        description = data.pop("description", "")  # shown under the scenario dropdown, not sent to the engine
+        out.append({"id": path.stem, "name": name, "description": description, "config": data})
     return out
 
 

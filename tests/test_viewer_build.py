@@ -12,6 +12,13 @@ class ViewerBuildTests(unittest.TestCase):
         self.assertEqual(presets["office_day"]["config"]["traffic"], "office_day")
         json.dumps(presets["office_day"])
 
+    def test_every_preset_explains_how_it_runs(self):
+        for preset in _presets():
+            with self.subTest(preset=preset["id"]):
+                # an explanation of how the scenario plays out, not a short label
+                self.assertGreaterEqual(len(preset.get("description", "")), 80)
+                self.assertNotIn("description", preset["config"])
+
     def test_office_day_is_never_precomputed(self):
         presets = _presets()
         self.assertIn("office_day", NO_PRECOMPUTE)
@@ -25,6 +32,7 @@ class ViewerBuildTests(unittest.TestCase):
             build_viewer(str(out), demo=False)
             page = out.read_text()
         self.assertIn('id="employees"', page)
+        self.assertIn('id="scenario-note"', page)
         self.assertIn('value="office_day"', page)
         self.assertIn('value="600"', page)
         self.assertIn("elevsim/schedule.py", page)

@@ -100,6 +100,7 @@
     preset.add(custom);
     (DATA.presets || []).forEach((p, i) => preset.add(new Option(p.name, String(i))));
     preset.value = keep || "";
+    updateScenarioNote();
     const strat = $("strategy");
     strat.innerHTML = "";
     strategies.forEach((s) => strat.add(new Option(s.label, s.name)));
@@ -109,6 +110,11 @@
     metric.innerHTML = "";
     for (const [k, m] of Object.entries(DATA.metrics)) metric.add(new Option(m.label, k));
     metric.value = "avg_journey";
+  }
+  // How the selected scenario will run, in words; "Custom" means the fields are set by hand.
+  function updateScenarioNote() {
+    const p = $("preset").value === "" ? null : DATA.presets[Number($("preset").value)];
+    $("scenario-note").textContent = p ? p.description || "" : "Custom: set the building and traffic yourself in the fields below.";
   }
   function updateStrategyNote() {
     const s = strategies.find((x) => x.name === $("strategy").value);
@@ -127,6 +133,7 @@
     if (i < 0) return;
     $("preset").value = String(i);
     fillForm(Object.assign({}, DEFAULTS, DATA.presets[i].config));
+    updateScenarioNote();
   }
 
   async function runSimulation() {
@@ -553,9 +560,10 @@
     $("preset").onchange = () => {
       const p = DATA.presets[Number($("preset").value)];
       if (p) fillForm(Object.assign({}, DEFAULTS, p.config));
+      updateScenarioNote();
       if (!py) { runSimulation(); runCompare(); }
     };
-    for (const f of CFG_FIELDS) if ($(f)) $(f).addEventListener("input", () => { if (document.activeElement === $(f)) $("preset").value = ""; });
+    for (const f of CFG_FIELDS) if ($(f)) $(f).addEventListener("input", () => { if (document.activeElement === $(f)) { $("preset").value = ""; updateScenarioNote(); } });
     $("traffic").addEventListener("change", syncTrafficFields);
     $("run-btn").onclick = runSimulation;
     $("compare-btn").onclick = runCompare;
@@ -575,7 +583,7 @@
       try {
         const res = JSON.parse(await file.text());
         if (!res.trace) throw new Error("this file has no animation trace; create one with: python -m elevsim run --trace out.json");
-        fillForm(res.config); $("preset").value = "";
+        fillForm(res.config); $("preset").value = ""; updateScenarioNote();
         setResult(res); play();
         $("run-hint").textContent = `Loaded ${file.name}.`;
       } catch (e) {

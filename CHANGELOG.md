@@ -36,6 +36,7 @@ when `dev` is promoted. Each entry links to its design spec when there is one.
   in the summary.
 - Summary keys `passengers_total` and `horizon`; CLI `--employees` and a kWh column in the compare table.
 - Viewer: the office scenario (live engine only), an HH:MM clock, energy rows, 120x and 600x speeds.
+- Viewer: a short explanation of how each scenario will run, under the Scenario dropdown.
 - `docs/code-map.md`, `docs/ideas.md` and the design spec and plan under `docs/superpowers/`.
 
 ### Changed
