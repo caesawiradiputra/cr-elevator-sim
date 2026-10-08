@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, dataclass, field, fields
 
+
 class ConfigError(ValueError):
     """Invalid configuration, whether a value is out of range or of the wrong type.
 
